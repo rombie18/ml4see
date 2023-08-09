@@ -1,0 +1,272 @@
+[
+ {
+   "name": "glasgow_data",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/k5ik89cizhWJTUG/glasgow_data.tar",
+   "size": "714000000"
+ },
+ {
+   "name": "run_006",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/eO0XX16uVAT8ii7/run_006.tar",
+   "size": "54000000"
+ },
+ {
+   "name": "run_007",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/85c25qXpUp0vrnq/run_007.tar",
+   "size": "547000000"
+ },
+ {
+   "name": "run_008",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/UBH6h0CvLw7TtHo/run_008.tar",
+   "size": "22000000000"
+ },
+ {
+   "name": "run_009",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/7QK4H1tnF81f5xi/run_009.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_010",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/KlzRv97yptnBDi9/run_010.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_011",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/7JnFbCb4Lv21JGE/run_011.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_012",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/okn5XOXw6Vb0f3f/run_012.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_013",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/N4eEvD8qEepxTqv/run_013.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_014",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/cljPBvJjDvU7Csq/run_014.tar",
+   "size": "9200000000"
+ },
+ {
+   "name": "run_015",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/jKzS4PnNqW6aiFn/run_015.tar",
+   "size": "81400000000"
+ },
+ {
+   "name": "run_016",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/mjz8Cqr9AY38AGI/run_016.tar",
+   "size": "14500000000"
+ },
+ {
+   "name": "run_017",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/bNKIr3LYBpYBW4j/run_017.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_018",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/m1Yn1qSxibbEzVJ/run_018.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_019",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/TY3YnfJGemNOy99/run_019.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_020",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/xmMi0nd7t13H2mo/run_020.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_021",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/zXG8DbdMj8BpCI6/run_021.tar",
+   "size": "2500000000"
+ },
+ {
+   "name": "run_022",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/fHhbppanYY2BSj1/run_022.tar",
+   "size": "45"
+ },
+ {
+   "name": "run_023",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/huQtIMKDTTI9g1m/run_023.tar",
+   "size": "50000000"
+ },
+ {
+   "name": "run_024",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/fCKJLozbk5X8zHX/run_024.tar",
+   "size": "171000000000"
+ },
+ {
+   "name": "run_025",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/FtkClgAd6pvAiZb/run_025.tar",
+   "size": "28000000"
+ },
+ {
+   "name": "run_026",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/uCDIkjl1MWZs8Yo/run_026.tar",
+   "size": "443000000000"
+ },
+ {
+   "name": "run_027",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/HlsP2iN5uXSRXIo/run_027.tar",
+   "size": "22000000000"
+ },
+ {
+   "name": "run_028",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/I0GTWHEYSjF3sBh/run_028.tar",
+   "size": "9000000000"
+ },
+ {
+   "name": "run_029",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/rGyOdUHc0zbx9tv/run_029.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_030",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/ZjPKDd0PQ33Jy1S/run_030.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_031",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/AKAI2pLG2KIqs05/run_031.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_032",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/3PBz6Vgg8OgWvUO/run_032.tar",
+   "size": "175"
+ },
+ {
+   "name": "run_033",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/J2dYtSiQfP0tW47/run_033.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_034",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/2RPxIYZrjwOJSNC/run_034.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_035",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/oDdwlds8yLZQRow/run_035.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_036",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/3RNZfWNLLFuGXf4/run_036.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_037",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/HUVXXJyL3DT15Xp/run_037.tar",
+   "size": "55000000"
+ },
+ {
+   "name": "run_038",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/7H6D9UASMoO1Kn3/run_038.tar",
+   "size": "9000000000"
+ },
+ {
+   "name": "run_039",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/UxIDTmVuQTenvhl/run_039.tar",
+   "size": "22000000000"
+ },
+ {
+   "name": "run_040",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/k7gXm5m1ICJpZbj/run_040.tar",
+   "size": "9000000000"
+ },
+ {
+   "name": "run_041",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/nFNjSrb0Zuu49ia/run_041.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_042",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/ZvzUeYT2uLdlBwo/run_042.tar",
+   "size": "25000000000"
+ },
+ {
+   "name": "run_043",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/BL0EnBM0Dua5M9n/run_043.tar",
+   "size": "8000000000"
+ },
+ {
+   "name": "run_044",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/qcbmGyOZrh5GTeQ/run_044.tar",
+   "size": "61000000000"
+ },
+ {
+   "name": "run_045",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/MRzKrxy2MkjliZu/run_045.tar",
+   "size": "6500000000"
+ },
+ {
+   "name": "run_046",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/Kw1kQS4bk2o7WtZ/run_046.tar",
+   "size": "7000000000"
+ },
+ {
+   "name": "run_047",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/mS377tUQXCAPGuT/run_047.tar",
+   "size": "2000000000"
+ },
+ {
+   "name": "run_048",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/7UxMzoK81X6MA2p/run_048.tar",
+   "size": "1000000000"
+ },
+ {
+   "name": "run_049",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/RZV9DNzGKdUefjR/run_049.tar",
+   "size": "3500000000"
+ },
+ {
+   "name": "run_050",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/sDReXIXEWGld1e8/run_050.tar",
+   "size": "5000000000"
+ },
+ {
+   "name": "run_051",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/KpOSHyTz132EqyE/run_051.tar",
+   "size": "45"
+ },
+ {
+   "name": "run_052",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/0KMDgqB22DbAjFa/run_052.tar",
+   "size": "3000000"
+ },
+ {
+   "name": "run_053",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/64YKJvSkKzpHj0q/run_053.tar",
+   "size": "3000000"
+ },
+ {
+   "name": "run_054",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/EefdzqU5bFryNKs/run_054.tar",
+   "size": "1000000"
+ },
+ {
+   "name": "run_055",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/sOFx1g7Sgwy2QcE/run_055.tar",
+   "size": "1000000"
+ },
+ {
+   "name": "run_056",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/5yspnShtjXv2H5L/run_056.tar",
+   "size": "250000000000"
+ },
+ {
+   "name": "run_057",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/aW4RE7zskJWVDtW/run_057.tar",
+   "size": "26000000000"
+ },
+ {
+   "name": "run_058",
+   "url": "https://cernbox.cern.ch/remote.php/dav/public-files/AyBe4fRe583F1jZ/run_058.tar",
+   "size": "6000000000"
+ }
+]

@@ -1,4 +1,6 @@
-h5py
-pandas
+inquirer
 numpy
 matplotlib
+h5py
+dask
+tsfresh
