@@ -1,10 +1,12 @@
-"""Create consolidated HDF5 file for a single run"""
-import argparse
+import dask.dataframe as dd
+import dask.bag as db
+import dask.array as da
+from dask.distributed import Client, print
 import os
 import pathlib
-import multiprocessing
 import time
 import struct
+import traceback
 
 import h5py
 import pandas as pd
@@ -13,21 +15,18 @@ import scipy.signal as sps
 
 import util
 
-"""
-HDF5 file processing of runs is to be done in stages.
-    This file (stage 1) overwrites any existing hdf5 files.
-    Subsequent stages may be invoked multiple times and should _remove and/or overwrite_ any data from previous executions.
-    The "processing_stage" attribute should be incremented for subsequent, dependent processing stages, so files can check
-    for the required level of pre-processing having occured. A "processing_stage_X_version" attribute should be included.
-"""
+DATA_RAW_SDR_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw"
+DATA_RAW_GLASGOW_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw/mcb2022_glasgow"
+DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
 
 META_PROCESSING_STAGE = 1  # processing stage of generated HDF files
-META_STAGE_1_VERSION = "2.0"  # version string for this stage (stage 1)
+META_STAGE_1_VERSION = "3.0"  # version string for this stage (stage 1)
 
 # Major changes
 # v1.0-alpha: initial structure
 # v1.0: by_x, by_y groups for SDR data
-# v2.0: sdr transients now in "all" group containing all transients (and no other subgroups)
+# v2.0: sdr transients now in "all" group containing all transients (ancleard no other subgroups)
+# v3.0: added support for parallelisation and clustering using Dask
 
 META_STATIC_ATTR_LIST = [
     ("run_date", str),  # date of run
@@ -78,7 +77,7 @@ class SDREventProcessor:
         self._fs = fs
         self._bw = bw
         self._n_fir = n_fir
-        self._taps = sps.remez(n_fir, [0, bw, bw + 200e3, fs / 2], [1, 0], Hz=fs)
+        self._taps = sps.remez(n_fir, [0, bw, bw + 200e3, fs / 2], [1, 0], fs=fs)
         self._tran_length = tran_length
 
     def file_to_iq(self, fname):
@@ -89,23 +88,33 @@ class SDREventProcessor:
         else:
             data = np.fromfile(fname, dtype=np.int16, offset=24)
         data = data.astype(float)
+        data = da.from_array(data)
         data_iq = data[0::2] + 1.0j * data[1::2]
         return data_iq
 
     def _downconvert_and_filter(self, data_iq):
         # complex NCO for fs/4 downconversion
-        dc_array = np.array([1 + 0j, 0 - 1j, -1 + 0j, 0 + 1j])
-        dc_array = np.tile(dc_array, len(data_iq) // 4)
+        dc_array = da.array([1 + 0j, 0 - 1j, -1 + 0j, 0 + 1j])
+        dc_array = da.tile(dc_array, len(data_iq) // 4)
         dc_array = dc_array[: len(data_iq)]
         data_iq = data_iq * dc_array
 
         ## low pass filter (band select)
-        data_iq = np.convolve(data_iq, self._taps, "valid")
+        data_iq_np = data_iq.compute()
+        data_iq = np.convolve(data_iq_np, self._taps, "valid")
+
         return data_iq
 
     def _freq_demod(self, data_iq):
-        phase = np.unwrap(np.arctan2(np.imag(data_iq), np.real(data_iq)))
-        freq_hz = np.diff(phase) * self._fs / (2 * np.pi)
+        def dask_unwrap(phase, discont=np.pi, axis=-1):
+            phase_diff = da.diff(phase, axis=axis, prepend=0)
+            jump = (phase_diff < -discont) | (phase_diff > discont)
+            jump_cumsum = da.cumsum(jump, axis=axis)
+            unwrapped_phase = phase + jump_cumsum * (2 * np.pi)
+            return unwrapped_phase
+
+        phase = dask_unwrap(da.arctan2(da.imag(data_iq), da.real(data_iq)))
+        freq_hz = da.diff(phase) * self._fs / (2 * np.pi)
         return freq_hz
 
     def file_to_dc_iq(self, fname):
@@ -114,11 +123,16 @@ class SDREventProcessor:
         return data_iq
 
     def file_to_freq(self, fname):
-        data_iq = self.file_to_iq(fname)
-        data_iq = self._downconvert_and_filter(data_iq)
-        freq_hz = self._freq_demod(data_iq)
-        return freq_hz
+        try:
+            data_iq = self.file_to_iq(fname)
+            data_iq = self._downconvert_and_filter(data_iq)
+            freq_hz = self._freq_demod(data_iq)
+            return freq_hz
+        except Exception as e:
+            print(e)
+            traceback.print_exc()
 
+            
 
 def find_run_folder(candidate_list, run_id):
     for folder in candidate_list:
@@ -126,7 +140,6 @@ def find_run_folder(candidate_list, run_id):
         if os.path.exists(candidate) and os.path.isdir(candidate):
             return candidate
     raise RuntimeError(f"Run folder not found in {str(candidate_list)}")
-
 
 def create_log_attrs(attr_list, node, logbook):
     for attr_name, attr_type in attr_list:
@@ -171,114 +184,91 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
         for fname in fnames
     ]
 
-    num_chunks = int(np.ceil(float(len(file_dicts)) / chunk_size))
-
-    pool = multiprocessing.Pool()
-
+    
     time_start = time.time()
     # We iterate over the data in chunks. This is required since:
     #  - we want to parallelize the DSP
     #  - parallel writes to the HDF datafile are not thread-safe
     #  - we only have finite amounts of RAM, so we can't process all transients before storing them
-    for chunk_id, chunk in enumerate(util.chunker(file_dicts, chunk_size)):
-        print(f"  Processing chunk {chunk_id + 1}/{num_chunks}...")
-        # extract frequency information
-        freqs = pool.map(dsp.file_to_freq, [entry["fname"] for entry in chunk])
-        for tran_dict, freq in zip(chunk, freqs):
-            if tran_dict["x"] == 999999 or tran_dict["y"] == 999999:
-                continue
-            # recover timestamp information
-            with open(tran_dict["fname"], "rb") as tranfile:
-                ts_data = struct.unpack("<QQQ", tranfile.read(24))
-            sys_ts_sec = float(ts_data[1]) + float(ts_data[2]) / 1e6
-            hw_ts_sec = float(ts_data[0]) / sdr_fs
+    
+    # extract frequency information
+    bag = db.from_sequence([entry["fname"] for entry in file_dicts])
+    tasks = bag.map(dsp.file_to_freq)
+    freqs = tasks.compute()
+    
+    for tran_dict, freq in zip(file_dicts, freqs):
+        if tran_dict["x"] == 999999 or tran_dict["y"] == 999999:
+            continue
+        # recover timestamp information
+        with open(tran_dict["fname"], "rb") as tranfile:
+            ts_data = struct.unpack("<QQQ", tranfile.read(24))
+        sys_ts_sec = float(ts_data[1]) + float(ts_data[2]) / 1e6
+        hw_ts_sec = float(ts_data[0]) / sdr_fs
 
-            # store everything to a dataset
-            tran_ds = all_group.create_dataset(f"tran_{tran_dict['id']:06d}", data=freq)
-            tran_ds.attrs.create("tran_num", tran_dict["id"])
-            tran_ds.attrs.create("x_lsb", tran_dict["x"])
-            tran_ds.attrs.create("y_lsb", tran_dict["y"])
-            tran_ds.attrs.create("hw_ts_sec", hw_ts_sec)
-            tran_ds.attrs.create("sys_ts_sec", sys_ts_sec)
-            tran_ds.attrs.create("dsp_info_pre_demod_bb_lo_freq_hz", sdr_fs / 4)
-            tran_ds.attrs.create("dataset_unit", "Hz")
+        # store everything to a dataset
+        tran_ds = all_group.create_dataset(f"tran_{tran_dict['id']:06d}", data=freq)
+        tran_ds.attrs.create("tran_num", tran_dict["id"])
+        tran_ds.attrs.create("x_lsb", tran_dict["x"])
+        tran_ds.attrs.create("y_lsb", tran_dict["y"])
+        tran_ds.attrs.create("hw_ts_sec", hw_ts_sec)
+        tran_ds.attrs.create("sys_ts_sec", sys_ts_sec)
+        tran_ds.attrs.create("dsp_info_pre_demod_bb_lo_freq_hz", sdr_fs / 4)
+        tran_ds.attrs.create("dataset_unit", "Hz")
 
-            # append dataset to by-x hierarchy
-            by_x_x_group = by_x_group.require_group(f"x_{tran_dict['x']:06d}")
-            if "x_lsb" not in by_x_x_group.attrs:
-                by_x_x_group.attrs.create("x_lsb", tran_dict["x"])
-            by_x_y_group = by_x_x_group.require_group(f"y_{tran_dict['y']:06d}")
-            if "y_lsb" not in by_x_y_group.attrs:
-                by_x_y_group.attrs.create("y_lsb", tran_dict["y"])
-            by_x_y_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
+        # append dataset to by-x hierarchy
+        by_x_x_group = by_x_group.require_group(f"x_{tran_dict['x']:06d}")
+        if "x_lsb" not in by_x_x_group.attrs:
+            by_x_x_group.attrs.create("x_lsb", tran_dict["x"])
+        by_x_y_group = by_x_x_group.require_group(f"y_{tran_dict['y']:06d}")
+        if "y_lsb" not in by_x_y_group.attrs:
+            by_x_y_group.attrs.create("y_lsb", tran_dict["y"])
+        by_x_y_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
 
-            # append dataset to by-y hierarchy
-            by_y_y_group = by_y_group.require_group(f"y_{tran_dict['y']:06d}")
-            if "y_lsb" not in by_y_y_group.attrs:
-                by_y_y_group.attrs.create("y_lsb", tran_dict["y"])
-            by_y_x_group = by_y_y_group.require_group(f"x_{tran_dict['x']:06d}")
-            if "x_lsb" not in by_y_x_group.attrs:
-                by_y_x_group.attrs.create("x_lsb", tran_dict["x"])
-            by_y_x_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
+        # append dataset to by-y hierarchy
+        by_y_y_group = by_y_group.require_group(f"y_{tran_dict['y']:06d}")
+        if "y_lsb" not in by_y_y_group.attrs:
+            by_y_y_group.attrs.create("y_lsb", tran_dict["y"])
+        by_y_x_group = by_y_y_group.require_group(f"x_{tran_dict['x']:06d}")
+        if "x_lsb" not in by_y_x_group.attrs:
+            by_y_x_group.attrs.create("x_lsb", tran_dict["x"])
+        by_y_x_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
 
-        time_elapsed = time.time() - time_start
-        time_per_chunk = time_elapsed / (chunk_id + 1)
-        time_remaining = time_per_chunk * (num_chunks - chunk_id - 1)
-        print(
-            f"  Time per chunk: {time_per_chunk:.02f} s; Remaining: {time_remaining:.02f} s"
-        )
-
+    time_elapsed = time.time() - time_start
     tps = len(file_dicts) / time_elapsed
     print(
         f"  Processing done. Elapsed time: {time_elapsed:.02f} s. Performance; {tps:.02f} files/s"
     )
 
+def process_run(run_number):
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("run_number", type=int)
-    parser.add_argument("--posttrig-samples", type=int)
-    args = parser.parse_args()
-
-    print(f"Processing run {args.run_number:03d}")
-
-    # validate environment
-    assert "MCB_DATA_FOLDERS_SDR" in os.environ, "Environment setup incomplete."
-    assert "MCB_DATA_FOLDERS_GLASGOW" in os.environ, "Environment setup incomplete."
-    sdr_data_folders = os.environ["MCB_DATA_FOLDERS_SDR"].split(":")
-    glasgow_data_folders = os.environ["MCB_DATA_FOLDERS_GLASGOW"].split(":")
-
-    # ensure required folders exist
-    if not os.path.exists("hdf5"):
-        os.mkdir("hdf5")
+    print(f"Processing run {run_number:03d}")
+    
+    sdr_data_folders = DATA_RAW_SDR_DIRECTORY.split(":")
+    glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
 
     # get run information from logbook
     logbook_data = pd.read_excel("logbook/mcb2022_logbook.xlsx", index_col=0).loc[
-        args.run_number
+        run_number
     ]
 
     pretrig_samples = logbook_data["sdr_info_len_pretrig"]
     posttrig_samples = logbook_data["sdr_info_len_posttrig"]
-    if args.posttrig_samples is not None:
-        assert posttrig_samples >= args.posttrig_samples
-        posttrig_samples = args.posttrig_samples
-        print(f"Cropping SDR data to {posttrig_samples} post-trigger samples")
 
-    run_folder_glasgow = find_run_folder(glasgow_data_folders, args.run_number)
+    run_folder_glasgow = find_run_folder(glasgow_data_folders, run_number)
     glasgow_txt_log_path = os.path.join(run_folder_glasgow, "run_log.txt")
     glasgow_csv_log_path = os.path.join(run_folder_glasgow, "hit_log.csv")
 
     assert os.path.exists(glasgow_txt_log_path), "Glasgow text log file not found"
     assert os.path.exists(glasgow_txt_log_path), "Glasgow CSV log file not found"
 
-    h5_path = os.path.join("hdf5", f"run_{args.run_number:03d}.h5")
+    h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
     with h5py.File(h5_path, "w") as h5file:
         # add run metadata
         print("Adding metadata...")
         meta_ds = h5file.create_dataset("meta", dtype="f")
         meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
         meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
-        meta_ds.attrs.create("run_id", args.run_number)
+        meta_ds.attrs.create("run_id", run_number)
         create_log_attrs(
             attr_list=META_STATIC_ATTR_LIST, node=meta_ds, logbook=logbook_data
         )
@@ -314,7 +304,7 @@ def main():
             )
             sdr_group.attrs.create("sdr_info_len_pretrig", int(pretrig_samples))
             sdr_group.attrs.create("sdr_info_len_posttrig", int(posttrig_samples))
-            run_folder_sdr = find_run_folder(sdr_data_folders, args.run_number)
+            run_folder_sdr = find_run_folder(sdr_data_folders, run_number)
             create_sdr_datasets(
                 run_folder=run_folder_sdr,
                 node=sdr_group,
@@ -323,7 +313,28 @@ def main():
 
     print("Done.")
     print()
+    
+    
+def main():
+    client = Client()
+    
+    entries = os.listdir(DATA_RAW_SDR_DIRECTORY)
+    prefix = "run_"
+    run_numbers = [int(entry.replace(prefix, "")) for entry in entries if entry.startswith(prefix)]
+    
+    try:
+        process_run(6)
+    except:
+        print("FAILED TO PROCESS RUN")
 
+    # for run_number in run_numbers:
+    #     try:
+    #         process_run(run_number)
+    #     except:
+    #         print("FAILED TO PROCESS RUN {}".format(run_number))
 
+    client.close()
+    
+    
 if __name__ == "__main__":
     main()
