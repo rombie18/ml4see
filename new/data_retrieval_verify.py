@@ -6,8 +6,10 @@ import json
 import logging
 import subprocess
 
-DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
-DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/data_retrieval_download.json"
+# DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
+# DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/data_retrieval_download.json"
+DATA_DOWNLOAD_DIRECTORY = "../data/hdf5"
+DATA_SUMMARY_PATH = "./data_retrieval_download.json"
 
 def main():
     logging.basicConfig(filename='data_retrieval_verify.log', filemode="w", level=logging.INFO, format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s')
@@ -43,7 +45,7 @@ def main():
             logging.error("Got {} as checksum but expected {}.".format(md5_returned, run["md5sum"]))
             return
 
-        logging.info("Validation of {} succeeded.".format(md5_returned, run["md5sum"]))
+        logging.info("Validation of {} succeeded.".format(run["md5sum"]))
         return
 
     bag = db.from_sequence(runs)
