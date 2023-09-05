@@ -21,12 +21,12 @@ HDF5 file processing of runs is to be done in stages.
     for the required level of pre-processing having occured. A "processing_stage_X_version" attribute should be included.
 """
 
-# DATA_RAW_SDR_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw"
-# DATA_RAW_GLASGOW_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw/mcb2022_glasgow"
-# DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
-DATA_RAW_SDR_DIRECTORY = "../data/hdf5"
-DATA_RAW_GLASGOW_DIRECTORY = "../data/glasgow"
-DATA_STRUCTURED_DIRECTORY = "../data/hdf5"
+DATA_RAW_SDR_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw"
+DATA_RAW_GLASGOW_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw/mcb2022_glasgow"
+DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
+# DATA_RAW_SDR_DIRECTORY = "../data/hdf5"
+# DATA_RAW_GLASGOW_DIRECTORY = "../data/glasgow"
+# DATA_STRUCTURED_DIRECTORY = "../data/hdf5"
 
 META_PROCESSING_STAGE = 1  # processing stage of generated HDF files
 META_STAGE_1_VERSION = "2.0"  # version string for this stage (stage 1)
