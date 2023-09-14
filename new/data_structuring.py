@@ -243,7 +243,7 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("run_number", type=int)
+    parser.add_argument('run_numbers', metavar='N', nargs='+', type=int)
     parser.add_argument("--posttrig-samples", type=int)
     args = parser.parse_args()
 
@@ -271,55 +271,59 @@ def main():
     assert os.path.exists(glasgow_txt_log_path), "Glasgow text log file not found"
     assert os.path.exists(glasgow_txt_log_path), "Glasgow CSV log file not found"
 
-    h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{args.run_number:03d}.h5")
-    with h5py.File(h5_path, "w") as h5file:
-        # add run metadata
-        print("Adding metadata...")
-        meta_ds = h5file.create_dataset("meta", dtype="f")
-        meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
-        meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
-        meta_ds.attrs.create("run_id", args.run_number)
-        create_log_attrs(
-            attr_list=META_STATIC_ATTR_LIST, node=meta_ds, logbook=logbook_data
-        )
-
-        if logbook_data["dut_type"] == "ADPLL":
+    for run_number in args.run_numbers:
+        print(f"** PROCESSING RUN {run_number:03d}")
+        h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
+        with h5py.File(h5_path, "w") as h5file:
+            # add run metadata
+            print("Adding metadata...")
+            meta_ds = h5file.create_dataset("meta", dtype="f")
+            meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
+            meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
+            meta_ds.attrs.create("run_id", run_number)
             create_log_attrs(
-                attr_list=META_ADPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
-            )
-        if logbook_data["dut_type"] == "LJPLL":
-            create_log_attrs(
-                attr_list=META_LJPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
+                attr_list=META_STATIC_ATTR_LIST, node=meta_ds, logbook=logbook_data
             )
 
-        # add FPGA text log
-        print("Adding FPGA log text file...")
-        with open(glasgow_txt_log_path, "r") as glasgow_log:
-            h5file.create_dataset("fpga_log", data=glasgow_log.read())
+            if logbook_data["dut_type"] == "ADPLL":
+                create_log_attrs(
+                    attr_list=META_ADPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
+                )
+            if logbook_data["dut_type"] == "LJPLL":
+                create_log_attrs(
+                    attr_list=META_LJPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
+                )
 
-        # add FPGA hit data
-        print("Adding FPGA hit log...")
-        fpga_hit_data = np.genfromtxt(glasgow_csv_log_path, delimiter=",", names=True)
-        fpga_hit_data["hw_ts_10us"] /= 1e5
-        fpga_hit_data.dtype.names = ("hw_ts_sec",) + fpga_hit_data.dtype.names[1:]
-        h5file.create_dataset("fpga_hit_data", data=fpga_hit_data)
+            # add FPGA text log
+            print("Adding FPGA log text file...")
+            with open(glasgow_txt_log_path, "r") as glasgow_log:
+                h5file.create_dataset("fpga_log", data=glasgow_log.read())
 
-        # process SDR data if available for this run
-        if logbook_data["sdr_data"]:
-            print("SDR data available for this run - processing SDR data.")
-            sdr_group = h5file.create_group("sdr_data")
-            # add SDR-related metadata
-            create_log_attrs(
-                attr_list=SDR_ATTR_LIST, node=sdr_group, logbook=logbook_data
-            )
-            sdr_group.attrs.create("sdr_info_len_pretrig", int(pretrig_samples))
-            sdr_group.attrs.create("sdr_info_len_posttrig", int(posttrig_samples))
-            run_folder_sdr = find_run_folder(sdr_data_folders, args.run_number)
-            create_sdr_datasets(
-                run_folder=run_folder_sdr,
-                node=sdr_group,
-                tran_length=int(pretrig_samples + posttrig_samples),
-            )
+            # add FPGA hit data
+            print("Adding FPGA hit log...")
+            fpga_hit_data = np.genfromtxt(glasgow_csv_log_path, delimiter=",", names=True)
+            fpga_hit_data["hw_ts_10us"] /= 1e5
+            fpga_hit_data.dtype.names = ("hw_ts_sec",) + fpga_hit_data.dtype.names[1:]
+            h5file.create_dataset("fpga_hit_data", data=fpga_hit_data)
+
+            # process SDR data if available for this run
+            if logbook_data["sdr_data"]:
+                print("SDR data available for this run - processing SDR data.")
+                sdr_group = h5file.create_group("sdr_data")
+                # add SDR-related metadata
+                create_log_attrs(
+                    attr_list=SDR_ATTR_LIST, node=sdr_group, logbook=logbook_data
+                )
+                sdr_group.attrs.create("sdr_info_len_pretrig", int(pretrig_samples))
+                sdr_group.attrs.create("sdr_info_len_posttrig", int(posttrig_samples))
+                run_folder_sdr = find_run_folder(sdr_data_folders, run_number)
+                create_sdr_datasets(
+                    run_folder=run_folder_sdr,
+                    node=sdr_group,
+                    tran_length=int(pretrig_samples + posttrig_samples),
+                )
+                
+            print(f"** FINISHED RUN {run_number:03d}")
 
     print("Done.")
     print()

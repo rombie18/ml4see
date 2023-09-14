@@ -27,7 +27,8 @@ def main():
     
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('runs', metavar='N', nargs='+', type=int)
+    parser.add_argument('run_numbers', metavar='N', nargs='+', type=int)
+    parser.add_argument("--keep", action="store_false", help="Do not delete file if download process fails")
     args = parser.parse_args()
 
     # Check if directories exist
@@ -45,10 +46,10 @@ def main():
         runs = json.load(file)
         
     # If runs are provided as arguments, only download the specified runs
-    if (len(args.runs) > 0):
-        logging.info(f"Runs argument present, only downloading: {args.runs}")
-        run_names = [f"run_{arg:03d}" for arg in args.runs]
-        runs = [run for run in runs if run["name"] in run_names]
+    if (len(args.run_numbers) > 0):
+        logging.info(f"Runs argument present, only downloading: {args.run_numbers}")
+        run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
+        runs = [run for run in runs if run["name"] in run_numbers]
     
     # Function that will try to download a file to the downloads directory
     def download_file(run):
@@ -65,8 +66,8 @@ def main():
                         file.write(chunk)
             logging.info(f"Downloaded {run['name']}.")
         except Exception as e:
-            # Delete partially downloaded file on failure if it exists
-            if os.path.exists(filename):
+            # Delete partially downloaded file on failure if it exists and the keep flag is not set
+            if not args.keep and os.path.exists(filename):
                 os.remove(filename)
             logging.exception(f"Failed to download {run['name']}!")
 

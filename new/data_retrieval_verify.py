@@ -27,7 +27,8 @@ def main():
     
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('runs', metavar='N', nargs='+', type=int)
+    parser.add_argument('run_numbers', metavar='N', nargs='+', type=int)
+    parser.add_argument("--keep", action="store_false", help="Do not delete file if verification process fails")
     args = parser.parse_args()
 
     # Check if directories exist
@@ -45,10 +46,10 @@ def main():
         runs = json.load(file)
         
     # If runs are provided as arguments, only verify the specified runs
-    if (len(args.runs) > 0):
-        logging.info(f"Runs argument present, only verifying: {args.runs}")
-        run_names = [f"run_{arg:03d}" for arg in args.runs]
-        runs = [run for run in runs if run["name"] in run_names]
+    if (len(args.run_numbers) > 0):
+        logging.info(f"Runs argument present, only verifying: {args.run_numbers}")
+        run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
+        runs = [run for run in runs if run["name"] in run_numbers]
     
     # Function that will verify file integrity using a md5sum
     def validate_file(run):
@@ -72,6 +73,9 @@ def main():
         if not md5_returned == run["md5sum"]:
             logging.error(f"Validation of {run['name']} failed!")
             logging.error(f"Got {md5_returned} as checksum but expected {run['md5sum']}.")
+            # If the keep flag is not set, delete the file if verification fails
+            if not args.keep:
+                os.remove(file_path)
             return
 
         logging.info("Validation of {run['md5sum']} succeeded.")

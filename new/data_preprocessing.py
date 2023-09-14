@@ -76,7 +76,7 @@ def main():
     
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("run_number", type=int)
+    parser.add_argument('run_numbers', metavar='N', nargs='+', type=int)
     args = parser.parse_args()
     
     # Set Pandas options to increase readability
@@ -91,37 +91,39 @@ def main():
         logging.error(f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}.")
         exit()
     
-    # Combine data directory with provided run number to open .h5 file in read mode
-    h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{args.run_number:03d}.h5")
-    with h5py.File(h5_path, "r") as h5file:
-        # Get run number and transients from file
-        run_num = h5file["meta"].attrs["run_id"]
-        transients = h5file["sdr_data"]["all"]
-        
-        # Set up tasks to convert transients to Pandas dataframes
-        transient_tasks = []
-        for tran_name in transients.keys():
-            transient_tasks.append(dask.delayed(extract_transient)(h5_path, tran_name))
-        # transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, "tran_000000"))
+    for run_number in args.run_numbers:
+        logging.info(f"Processing run {run_number:03d}")
+        # Combine data directory with provided run number to open .h5 file in read mode
+        h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
+        with h5py.File(h5_path, "r") as h5file:
+            # Get run number and transients from file
+            run_num = h5file["meta"].attrs["run_id"]
+            transients = h5file["sdr_data"]["all"]
+            
+            # Set up tasks to convert transients to Pandas dataframes
+            transient_tasks = []
+            for tran_name in transients.keys():
+                transient_tasks.append(dask.delayed(extract_transient)(h5_path, tran_name))
+            # transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, "tran_000000"))
 
-        # Set up task to merge all transients into single Dask dataframe
-        transients_task = dd.from_delayed(transient_tasks)
-        
-        # Set up task to extract features from each transient and merge then into one fDask dataframe
-        features_task = transients_task.map_partitions(process_transient, enforce_metadata=False)                         
-        
-        # Save extracted features to partitioned parquet file
-        features_task.to_parquet(
-            path=os.path.join(DATA_FEATURES_DIRECTORY, f"run_{args.run_number:03d}"),
-            write_index=False, 
-            partition_on="transient",
-            engine="pyarrow",
-            append=False
-        )
-        
-        # Execute above tasks
-        # features = features_task.compute()
-        # print(features)
+            # Set up task to merge all transients into single Dask dataframe
+            transients_task = dd.from_delayed(transient_tasks)
+            
+            # Set up task to extract features from each transient and merge then into one fDask dataframe
+            features_task = transients_task.map_partitions(process_transient, enforce_metadata=False)                         
+            
+            # Save extracted features to partitioned parquet file
+            features_task.to_parquet(
+                path=os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}"),
+                write_index=False, 
+                partition_on="transient",
+                engine="pyarrow",
+                append=False
+            )
+            
+            # Execute above tasks
+            # features = features_task.compute()
+            # print(features)
                         
 if __name__ == "__main__":
     cluster = LocalCluster(
