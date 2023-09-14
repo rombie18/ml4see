@@ -46,6 +46,7 @@ def extract_transient(h5_path, tran_name):
         
 def process_transient(df):
     # Extract features of single transient
+    # TODO use multiprocessing here dependant on how many thread this worker has available
     feature_df = extract_features(
         df, 
         column_id="transient",

@@ -28,7 +28,7 @@ def main():
     # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
-    parser.add_argument("--keep", action="store_false", help="Do not delete file if verification process fails")
+    parser.add_argument("--keep", action="store_true", help="Do not delete file if verification process fails")
     args = parser.parse_args()
 
     # Check if directories exist
