@@ -13,7 +13,8 @@ DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/down
 DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
 
 def main():
-    # Initialiser logging
+    # Initialise logging
+    # FIXME logging not working in Dask workers (other processes)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -31,11 +32,11 @@ def main():
 
     # Check if directories exist
     if not os.path.exists(DATA_DOWNLOAD_DIRECTORY):
-        logging.error("The data download directory does not exist at {}.".format(DATA_DOWNLOAD_DIRECTORY))
+        logging.error(f"The data download directory does not exist at {DATA_DOWNLOAD_DIRECTORY}.")
         exit()
         
     if not os.path.exists(DATA_SUMMARY_PATH):
-        logging.error("The data summary file does not exist at {}.".format(DATA_SUMMARY_PATH))
+        logging.error(f"The data summary file does not exist at {DATA_SUMMARY_PATH}.")
         exit()
     
     # Get run information from summary file
@@ -56,11 +57,11 @@ def main():
         
         # If run is not found on disk or has no md5sum available, skip
         if not os.path.exists(file_path):
-            logging.warning("Skip validating {} since it was not found on disk!".format(run["name"]))
+            logging.warning(f"Skip validating {run['name']} since it was not found on disk!")
             return
         
         if "md5sum" not in run:
-            logging.warning("Skip validating {} since it has no md5 checksum available!".format(run["name"]))
+            logging.warning(f"Skip validating {run['name']} since it has no md5 checksum available!")
             return
             
         # Execute md5sum command and pipe output to this python script and select result
@@ -69,11 +70,11 @@ def main():
 
         # Check if calculated md5sum matches the provided one in the data summary file
         if not md5_returned == run["md5sum"]:
-            logging.error("Validation of {} failed!".format(run["name"]))
-            logging.error("Got {} as checksum but expected {}.".format(md5_returned, run["md5sum"]))
+            logging.error(f"Validation of {run['name']} failed!")
+            logging.error(f"Got {md5_returned} as checksum but expected {run['md5sum']}.")
             return
 
-        logging.info("Validation of {} succeeded.".format(run["md5sum"]))
+        logging.info("Validation of {run['md5sum']} succeeded.")
         return
 
     # Set up bag with runs
@@ -86,11 +87,13 @@ def main():
 
 
 if __name__ == "__main__":
+    # Set-up Dask local cluster for distributed processing
     cluster = LocalCluster(
         n_workers=20,
         threads_per_worker=1,
     )
     client = Client(cluster)
+    
     try:
         main()
     except:

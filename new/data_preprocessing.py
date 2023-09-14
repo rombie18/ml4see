@@ -19,19 +19,23 @@ DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/feat
 
 FC_PARAMETERS = MinimalFCParameters()
 
-def extract_transient(h5_path, run_num, tran_name):
+def extract_transient(h5_path, tran_name):
     try:
         with h5py.File(h5_path, "r") as h5file:
+            # Get transient samples
             tran_data = h5file["sdr_data"]["all"][tran_name]
             
+            # Get additional meta data
             fs = h5file["sdr_data"].attrs["sdr_info_fs"]
             len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
             len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
             dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
 
+            # Calculate real time from meta data
             event_len = len_pretrig + len_posttrig - dsp_ntaps
             time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         
+            # Convert transient data to Pandas dataframe
             df = pd.DataFrame.from_dict({'transient': tran_name, 'time': time_data, 'frequency': np.array(tran_data)})
             
             return df
@@ -41,7 +45,7 @@ def extract_transient(h5_path, run_num, tran_name):
         traceback.print_exc()
         
 def process_transient(df):
-
+    # Extract features of single transient
     feature_df = extract_features(
         df, 
         column_id="transient",
@@ -51,6 +55,7 @@ def process_transient(df):
         disable_progressbar=True
     )
     
+    # Set tranient column as index and mark as category type
     feature_df = feature_df.rename_axis("transient").reset_index(drop=False)
     feature_df.transient = feature_df.transient.astype('category')
     
@@ -80,10 +85,10 @@ def main():
 
     # Check if directories exist
     if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
-        logging.error("The structured data directory does not exist at {}.".format(DATA_STRUCTURED_DIRECTORY))
+        logging.error(f"The structured data directory does not exist at {DATA_STRUCTURED_DIRECTORY}.")
         exit()
     if not os.path.exists(DATA_FEATURES_DIRECTORY):
-        logging.error("The features data directory does not exist at {}.".format(DATA_FEATURES_DIRECTORY))
+        logging.error(f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}.")
         exit()
     
     # Combine data directory with provided run number to open .h5 file in read mode
@@ -96,7 +101,7 @@ def main():
         # Set up tasks to convert transients to Pandas dataframes
         transient_tasks = []
         for tran_name in transients.keys():
-            transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, tran_name))
+            transient_tasks.append(dask.delayed(extract_transient)(h5_path, tran_name))
         # transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, "tran_000000"))
 
         # Set up task to merge all transients into single Dask dataframe

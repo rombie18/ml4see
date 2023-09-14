@@ -24,11 +24,11 @@ def main():
 
     # Check if directories exist
     if not os.path.exists(DATA_DOWNLOAD_DIRECTORY):
-        logging.error("The data download directory does not exist at {}.".format(DATA_DOWNLOAD_DIRECTORY))
+        logging.error(f"The data download directory does not exist at {DATA_DOWNLOAD_DIRECTORY}.")
         exit()
         
     if not os.path.exists(DATA_RAW_DIRECTORY):
-        logging.error("The data raw directory does not exist at {}.".format(DATA_RAW_DIRECTORY))
+        logging.error(f"The data raw directory does not exist at {DATA_RAW_DIRECTORY}.")
         exit()
         
     # Get all downloaded runs

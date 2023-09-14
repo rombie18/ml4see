@@ -11,7 +11,7 @@ from dask.distributed import Client, LocalCluster
 # TODO set these variables in single external file
 DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
 DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
-NETWORK_TIMEOUT = 500
+NETWORK_TIMEOUT = 1200
 
 def main():
     # Initialise logging
@@ -32,11 +32,11 @@ def main():
 
     # Check if directories exist
     if not os.path.exists(DATA_DOWNLOAD_DIRECTORY):
-        logging.error("The data download directory does not exist at {}.".format(DATA_DOWNLOAD_DIRECTORY))
+        logging.error(f"The data download directory does not exist at {DATA_DOWNLOAD_DIRECTORY}.")
         exit()
 
     if not os.path.exists(DATA_SUMMARY_PATH):
-        logging.error("There is no data summary file found at {}.".format(DATA_SUMMARY_PATH))
+        logging.error(f"There is no data summary file found at {DATA_SUMMARY_PATH}.")
         exit()
         
     # Get run information from summary file
@@ -63,9 +63,12 @@ def main():
                     # Push data downloaded from server to file in chunks so it fits in memory
                     for chunk in response.iter_content(chunk_size=8192):
                         file.write(chunk)
-            logging.info("Downloaded {}.".format(run["name"]))
+            logging.info(f"Downloaded {run['name']}.")
         except Exception as e:
-            logging.fatal("Failed to download {}!".format(run["name"]), exc_info=True)
+            # Delete partially downloaded file on failure if it exists
+            if os.path.exists(filename):
+                os.remove(filename)
+            logging.exception(f"Failed to download {run['name']}!")
 
     # Set up bag with runs
     bag = db.from_sequence(runs)
