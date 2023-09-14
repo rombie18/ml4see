@@ -10,7 +10,7 @@ from dask.distributed import Client, LocalCluster
 
 # TODO set these variables in single external file
 DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
-DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/data_retrieval_download.json"
+DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
 NETWORK_TIMEOUT = 500
 
 def main():
@@ -46,7 +46,9 @@ def main():
         
     # If runs are provided as arguments, only download the specified runs
     if (len(args.runs) > 0):
-        runs = [run for run in runs if run["name"] in args.runs]
+        logging.info(f"Runs argument present, only downloading: {args.runs}")
+        run_names = [f"run_{arg:03d}" for arg in args.runs]
+        runs = [run for run in runs if run["name"] in run_names]
     
     # Function that will try to download a file to the downloads directory
     def download_file(run):

@@ -2,6 +2,7 @@ import os
 import json
 import logging
 import subprocess
+import argparse
 
 import dask.dataframe as dd
 import dask.bag as db
@@ -22,6 +23,11 @@ def main():
         ]
     )
     logging.info("Starting data retrieval verify process...")
+    
+    # Initialise argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument('runs', metavar='N', nargs='+', type=int)
+    args = parser.parse_args()
 
     # Check if directories exist
     if not os.path.exists(DATA_DOWNLOAD_DIRECTORY):
@@ -36,6 +42,12 @@ def main():
     runs = []
     with open(DATA_SUMMARY_PATH, 'r', encoding="utf-8") as file:
         runs = json.load(file)
+        
+    # If runs are provided as arguments, only verify the specified runs
+    if (len(args.runs) > 0):
+        logging.info(f"Runs argument present, only verifying: {args.runs}")
+        run_names = [f"run_{arg:03d}" for arg in args.runs]
+        runs = [run for run in runs if run["name"] in run_names]
     
     # Function that will verify file integrity using a md5sum
     def validate_file(run):
