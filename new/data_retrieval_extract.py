@@ -25,7 +25,7 @@ def main():
 
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('run_numbers', metavar='N', nargs='+', type=int)
+    parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
     args = parser.parse_args()
     
     # Check if directories exist
@@ -64,10 +64,7 @@ def main():
 
     
 if __name__ == "__main__":
-    cluster = LocalCluster(
-        n_workers=20,
-        threads_per_worker=1,
-    )
+    cluster = LocalCluster()
     client = Client(cluster)
     try:
         main()
