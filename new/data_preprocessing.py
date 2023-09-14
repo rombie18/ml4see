@@ -9,6 +9,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask.distributed import Client
+from tsfresh.utilities.distribution import LocalDaskDistributor
 from tsfresh import extract_features
 
 DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
@@ -28,13 +29,13 @@ def process_transient(h5_path, run_num, tran_name):
             time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         
             #time_data[:10000]
-            df = pd.DataFrame.from_dict({'run': run_num, 'transient': tran_name, 'time': np.arange(0, 10000, 1, dtype=np.float64), 'frequency': np.array(tran_data)[:10000]})
+            df = pd.DataFrame.from_dict({'run': run_num, 'transient': tran_name, 'time': np.arange(0, 1000, 1, dtype=np.float64), 'frequency': np.array(tran_data)[:1000]})
             return df
         
     except Exception as e:
         logging.error(f"Error processing transient {tran_name}: {str(e)}")
         
-def main():
+def main(cluster):
     logging.basicConfig(filename='data_preprocessing.log', filemode="w", level=logging.INFO, format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s')
     logging.info("Starting data preprocessing process...")
     logging.getLogger("distributed.scheduler").setLevel(logging.DEBUG)
@@ -60,25 +61,31 @@ def main():
         df = dd.from_delayed(dfs)
         df = df.compute()
         
-        pd.set_option('display.float_format', lambda x: '%.9f' % x)
-        print(df)
+        # pd.set_option('display.float_format', lambda x: '%.9f' % x)
+        # print(df)
         
         #FIXME features extraction doesn't start properly and gets stuck
-        result = extract_features(df,
+        task = extract_features(df,
                      column_id="run",
                      column_sort="time",
-                    #  column_kind="transient",
-                    #  column_value="frequency",
+                     column_kind="transient",
+                     column_value="frequency",
                      pivot=False,
-                     n_jobs=16)
+                     distributor=cluster)
 
-        print(result)
+        features = task.compute()
+        
+        print("test")
+
+        print(features)
 
 if __name__ == "__main__":
     try:
-        client = Client()
-        main()
+        cluster = LocalDaskDistributor(n_workers=2)
+        client = Client(cluster)
+        main(client)
     except:
         logging.exception("Fatal exception in main")
+        traceback.print_exc()
     finally:
         client.close()
