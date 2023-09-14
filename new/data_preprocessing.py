@@ -5,17 +5,21 @@ import h5py
 import argparse
 import numpy as np
 import pandas as pd
+
 import dask
-import dask.array as da
 import dask.dataframe as dd
-from dask.distributed import Client
-from tsfresh.utilities.distribution import LocalDaskDistributor
-from tsfresh import extract_features
+from dask.distributed import Client, LocalCluster
 
+from tsfresh.feature_extraction import extract_features
+from tsfresh.feature_extraction.settings import MinimalFCParameters
+
+# TODO set these variables in single external file
 DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
-#DATA_STRUCTURED_DIRECTORY = "../data/hdf5"
+DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
 
-def process_transient(h5_path, run_num, tran_name):
+FC_PARAMETERS = MinimalFCParameters()
+
+def extract_transient(h5_path, run_num, tran_name):
     try:
         with h5py.File(h5_path, "r") as h5file:
             tran_data = h5file["sdr_data"]["all"][tran_name]
@@ -28,64 +32,101 @@ def process_transient(h5_path, run_num, tran_name):
             event_len = len_pretrig + len_posttrig - dsp_ntaps
             time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         
-            #time_data[:10000]
-            df = pd.DataFrame.from_dict({'run': run_num, 'transient': tran_name, 'time': np.arange(0, 1000, 1, dtype=np.float64), 'frequency': np.array(tran_data)[:1000]})
+            df = pd.DataFrame.from_dict({'transient': tran_name, 'time': time_data, 'frequency': np.array(tran_data)})
+            
             return df
         
     except Exception as e:
         logging.error(f"Error processing transient {tran_name}: {str(e)}")
+        traceback.print_exc()
         
-def main(cluster):
-    logging.basicConfig(filename='data_preprocessing.log', filemode="w", level=logging.INFO, format='%(asctime)s.%(msecs)03d %(levelname)s %(module)s - %(funcName)s: %(message)s')
-    logging.info("Starting data preprocessing process...")
-    logging.getLogger("distributed.scheduler").setLevel(logging.DEBUG)
+def process_transient(df):
+
+    feature_df = extract_features(
+        df, 
+        column_id="transient",
+        column_sort="time",
+        n_jobs=0,
+        default_fc_parameters=FC_PARAMETERS,
+        disable_progressbar=True
+    )
     
-    if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
-        logging.warning("The structured data directory does not exist at {}.".format(DATA_STRUCTURED_DIRECTORY))
+    feature_df = feature_df.rename_axis("transient").reset_index(drop=False)
+    feature_df.transient = feature_df.transient.astype('category')
+    
+    return feature_df
+
         
+def main():
+    # Initialise logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("data_preprocessing.log", mode='w'),
+            logging.StreamHandler()
+        ]
+    )
+    logging.info("Starting data preprocessing process...")
+    
+    # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("run_number", type=int)
     args = parser.parse_args()
     
+    # Set Pandas options to increase readability
+    pd.set_option('display.float_format', lambda x: '%.9f' % x)
+    pd.options.display.max_rows = 1000
+
+    # Check if directories exist
+    if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
+        logging.error("The structured data directory does not exist at {}.".format(DATA_STRUCTURED_DIRECTORY))
+        exit()
+    if not os.path.exists(DATA_FEATURES_DIRECTORY):
+        logging.error("The features data directory does not exist at {}.".format(DATA_FEATURES_DIRECTORY))
+        exit()
+    
+    # Combine data directory with provided run number to open .h5 file in read mode
     h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{args.run_number:03d}.h5")
     with h5py.File(h5_path, "r") as h5file:
-                
+        # Get run number and transients from file
         run_num = h5file["meta"].attrs["run_id"]
         transients = h5file["sdr_data"]["all"]
         
-        dfs = []
-        # for tran_name in transients.keys():
-        #     dfs.append(dask.delayed(process_transient)(h5_path, run_num, tran_name))
-        dfs.append(dask.delayed(process_transient)(h5_path, run_num, "tran_000000"))
+        # Set up tasks to convert transients to Pandas dataframes
+        transient_tasks = []
+        for tran_name in transients.keys():
+            transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, tran_name))
+        # transient_tasks.append(dask.delayed(extract_transient)(h5_path, run_num, "tran_000000"))
 
-        df = dd.from_delayed(dfs)
-        df = df.compute()
+        # Set up task to merge all transients into single Dask dataframe
+        transients_task = dd.from_delayed(transient_tasks)
         
-        # pd.set_option('display.float_format', lambda x: '%.9f' % x)
-        # print(df)
+        # Set up task to extract features from each transient and merge then into one fDask dataframe
+        features_task = transients_task.map_partitions(process_transient, enforce_metadata=False)                         
         
-        #FIXME features extraction doesn't start properly and gets stuck
-        task = extract_features(df,
-                     column_id="run",
-                     column_sort="time",
-                     column_kind="transient",
-                     column_value="frequency",
-                     pivot=False,
-                     distributor=cluster)
-
-        features = task.compute()
+        # Save extracted features to partitioned parquet file
+        features_task.to_parquet(
+            path=os.path.join(DATA_FEATURES_DIRECTORY, f"run_{args.run_number:03d}"),
+            write_index=False, 
+            partition_on="transient",
+            engine="pyarrow",
+            append=False
+        )
         
-        print("test")
-
-        print(features)
-
+        # Execute above tasks
+        # features = features_task.compute()
+        # print(features)
+                        
 if __name__ == "__main__":
+    cluster = LocalCluster(
+        n_workers=20,
+        threads_per_worker=1,
+    )
+    client = Client(cluster)
     try:
-        cluster = LocalDaskDistributor(n_workers=2)
-        client = Client(cluster)
-        main(client)
+        main()
     except:
         logging.exception("Fatal exception in main")
-        traceback.print_exc()
     finally:
         client.close()
