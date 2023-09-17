@@ -248,33 +248,42 @@ def main():
     parser.add_argument("--posttrig-samples", type=int)
     args = parser.parse_args()
 
-    print(f"Processing run {args.run_number:03d}")
+    run_numbers = []
+    if (len(args.run_numbers) == 0):
+        for dir in os.scandir(DATA_RAW_SDR_DIRECTORY):
+            if dir.is_dir():
+                if dir.path.split('/')[-1].startswith('run_'):
+                    run_numbers.append(int(dir.path.split('/')[-1][4:]))
+        print(f"No runs specified, running on all available runs: {run_numbers}")       
+    else:
+        run_numbers = args.run_numbers
 
-    sdr_data_folders = DATA_RAW_SDR_DIRECTORY.split(":")
-    glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
-
-    # get run information from logbook
-    logbook_data = pd.read_excel("logbook/mcb2022_logbook.xlsx", index_col=0).loc[
-        args.run_number
-    ]
-
-    pretrig_samples = logbook_data["sdr_info_len_pretrig"]
-    posttrig_samples = logbook_data["sdr_info_len_posttrig"]
-    if args.posttrig_samples is not None:
-        assert posttrig_samples >= args.posttrig_samples
-        posttrig_samples = args.posttrig_samples
-        print(f"Cropping SDR data to {posttrig_samples} post-trigger samples")
-
-    run_folder_glasgow = find_run_folder(glasgow_data_folders, args.run_number)
-    glasgow_txt_log_path = os.path.join(run_folder_glasgow, "run_log.txt")
-    glasgow_csv_log_path = os.path.join(run_folder_glasgow, "hit_log.csv")
-
-    assert os.path.exists(glasgow_txt_log_path), "Glasgow text log file not found"
-    assert os.path.exists(glasgow_txt_log_path), "Glasgow CSV log file not found"
-
-    for run_number in args.run_numbers:
+    for run_number in run_numbers:
         try:
-            print(f"** PROCESSING RUN {run_number:03d}")
+            print(f"** PROCESSING RUN {run_number:03d} **")
+
+            sdr_data_folders = DATA_RAW_SDR_DIRECTORY.split(":")
+            glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
+
+            # get run information from logbook
+            logbook_data = pd.read_excel("logbook/mcb2022_logbook.xlsx", index_col=0).loc[
+                run_number
+            ]
+
+            pretrig_samples = logbook_data["sdr_info_len_pretrig"]
+            posttrig_samples = logbook_data["sdr_info_len_posttrig"]
+            if args.posttrig_samples is not None:
+                assert posttrig_samples >= args.posttrig_samples
+                posttrig_samples = args.posttrig_samples
+                print(f"Cropping SDR data to {posttrig_samples} post-trigger samples")
+
+            run_folder_glasgow = find_run_folder(glasgow_data_folders, run_number)
+            glasgow_txt_log_path = os.path.join(run_folder_glasgow, "run_log.txt")
+            glasgow_csv_log_path = os.path.join(run_folder_glasgow, "hit_log.csv")
+
+            assert os.path.exists(glasgow_txt_log_path), "Glasgow text log file not found"
+            assert os.path.exists(glasgow_txt_log_path), "Glasgow CSV log file not found"
+    
             h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
             with h5py.File(h5_path, "w") as h5file:
                 # add run metadata
@@ -325,9 +334,9 @@ def main():
                         tran_length=int(pretrig_samples + posttrig_samples),
                     )
                     
-                print(f"** FINISHED RUN {run_number:03d}")
+                print(f"** FINISHED RUN {run_number:03d} **")
         except:
-            if os.path.exists(h5_path):
+            if h5_path and os.path.exists(h5_path):
                 os.remove(h5_path)
             print(f"** RUN {run_number:03d} FAILED")
 
