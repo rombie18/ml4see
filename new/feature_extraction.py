@@ -11,13 +11,14 @@ import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
 
 from tsfresh.feature_extraction import extract_features
-from tsfresh.feature_extraction.settings import MinimalFCParameters, EfficientFCParameters
+from tsfresh.feature_extraction.settings import MinimalFCParameters, EfficientFCParameters, ComprehensiveFCParameters
 
 # TODO set these variables in single external file
 DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
 DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
 
-FC_PARAMETERS = EfficientFCParameters()
+FC_PARAMETERS = ComprehensiveFCParameters()
+DOWNSAMPLE_FACTOR = 50
 
 def load_transient(h5_path, tran_name, time_data):
     try:
@@ -25,8 +26,8 @@ def load_transient(h5_path, tran_name, time_data):
             # Get transient samples
             tran_data = h5file["sdr_data"]["all"][tran_name]
             
-            # Downsampling, TODO make downsaple factor global constant
-            tran_data = tran_data[::100]
+            # Downsampling
+            tran_data = tran_data[::DOWNSAMPLE_FACTOR]
         
             # Convert transient data to Pandas dataframe
             df = pd.DataFrame.from_dict({'transient': tran_name, 'time': time_data, 'frequency': np.array(tran_data)})
@@ -53,12 +54,12 @@ def process_transient(df):
         disable_progressbar=True
     )
     
-    # Set tranient column as index and mark as category type
+    # Set tranient column as index
     feature_df = feature_df.rename_axis("transient").reset_index(drop=False)
     feature_df.transient = feature_df.transient.astype('category')
+    feature_df.set_index('transient')
     
     return feature_df
-
         
 def main():
     # Initialise logging
@@ -66,11 +67,11 @@ def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.FileHandler("data_preprocessing.log", mode='w'),
+            logging.FileHandler("feature_extraction.log", mode='w'),
             logging.StreamHandler()
         ]
     )
-    logging.info("Starting data preprocessing process...")
+    logging.info("Starting feature extraction process...")
     
     # Initialise argument parser
     parser = argparse.ArgumentParser()
@@ -109,7 +110,7 @@ def main():
             time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
             
             # Downsampling
-            time_data = time_data[::100]
+            time_data = time_data[::DOWNSAMPLE_FACTOR]
             
             #TODO write comment
             time_data_future = client.scatter(time_data)
@@ -126,11 +127,13 @@ def main():
             features_task = transients_task.map_partitions(process_transient)
             
             # Execute above tasks
-            features = features_task.compute()
-            # print(features)
+            features: pd.DataFrame = features_task.compute()
+            
+            # Add valid column for feature significance testing
+            features.insert(1, "valid", True)
 
             # Save extracted features to csv file
-            features.to_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+            features.to_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"), index=False)
             
                         
 if __name__ == "__main__":

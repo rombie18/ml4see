@@ -26,10 +26,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
     args = parser.parse_args()
-    
-    # Set Pandas options to increase readability
-    pd.set_option('display.float_format', lambda x: '%.9f' % x)
-    pd.options.display.max_rows = 1000
 
     # Check if directories exist
     if not os.path.exists(DATA_FEATURES_DIRECTORY):
@@ -40,17 +36,25 @@ def main():
         logging.info(f"Processing run {run_number:03d}")
         # Combine data directory with provided run number to open .h5 file in read mode
         csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
-        df = pd.read_csv(csv_path)
+        df = pd.read_csv(csv_path, dtype={'transient': 'category'})
         
+        # Drop transient column and columns that contain one or more NaN values
+        df = df.drop('transient', axis=1)
         df = df.dropna(axis=1, how='all')
-        
+
+        # Target vector to predict is the valid column
         y = pd.Series(data = df['valid'])
             
+        # Calculate relevance table
         relevance_table = calculate_relevance_table(df, y)
         relevance_table = relevance_table[relevance_table.relevant]
         relevance_table.sort_values("p_value", inplace=True)
-        print(relevance_table[:10])
-                        
+        
+        # Save and print relevance table
+        relevance_table.to_csv(f"feature_selections_{run_number:03d}.csv")
+        print(relevance_table)
+        
+
 if __name__ == "__main__":
     try:
         main()
