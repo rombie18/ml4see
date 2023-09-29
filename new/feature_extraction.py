@@ -18,25 +18,28 @@ DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/st
 DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
 
 FC_PARAMETERS = ComprehensiveFCParameters()
-DOWNSAMPLE_FACTOR = 50
+WINDOW_SIZE = 500
+DOWNSAMPLE_FACTOR = 250
 
 def load_transient(h5_path, tran_name, time_data):
-    try:
-        with h5py.File(h5_path, "r") as h5file:
-            # Get transient samples
-            tran_data = h5file["sdr_data"]["all"][tran_name]
-            
-            # Downsampling
-            tran_data = tran_data[::DOWNSAMPLE_FACTOR]
+    with h5py.File(h5_path, "r") as h5file:
+        # Get transient samples
+        tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
         
-            # Convert transient data to Pandas dataframe
-            df = pd.DataFrame.from_dict({'transient': tran_name, 'time': time_data, 'frequency': np.array(tran_data)})
-            
-            return df
-        
-    except Exception as e:
-        logging.error(f"Error processing transient {tran_name}: {str(e)}")
-        traceback.print_exc()
+        # Apply moving average filter
+        window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
+        tran_data = np.convolve(tran_data, window, mode='valid')
+                
+        # Adjust time data to match length of convoluted output
+        time_data = time_data[(len(window)-1):]
+
+        # Downsample time and frequency data
+        time_data = time_data[::DOWNSAMPLE_FACTOR]
+        tran_data = tran_data[::DOWNSAMPLE_FACTOR]
+
+        # Convert transient data to Pandas dataframe
+        df = pd.DataFrame.from_dict({'transient': tran_name, 'time': time_data, 'frequency': tran_data})
+        return df
         
 def process_transient(df):
     
@@ -108,9 +111,6 @@ def main():
             # Calculate real time from meta data
             event_len = len_pretrig + len_posttrig - dsp_ntaps
             time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-            
-            # Downsampling
-            time_data = time_data[::DOWNSAMPLE_FACTOR]
             
             #TODO write comment
             time_data_future = client.scatter(time_data)
