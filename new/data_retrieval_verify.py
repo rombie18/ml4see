@@ -1,3 +1,41 @@
+"""
+data_retrieval_verify.py
+
+This Python script is designed to verify the integrity of downloaded data files by comparing their MD5 checksums with the values provided in a JSON summary file. It provides options to verify specific runs and handles verification failures, allowing for the deletion of corrupted files. Configuration constants are imported from an external module for flexibility.
+
+Usage:
+    python data_retrieval_verify.py [run_numbers [run_numbers ...]] [--keep]
+
+Arguments:
+    run_numbers (optional): A list of integers representing specific run numbers to verify. If provided, only the runs with matching numbers will be verified.
+    --keep (optional): If this flag is set, files with failed verification will not be deleted.
+
+Configuration (imported from 'config.py'):
+    - DATA_DOWNLOAD_DIRECTORY: The directory where downloaded tar files are located.
+    - DATA_SUMMARY_PATH: The path to the JSON summary file containing information about the data runs.
+
+The script performs the following steps:
+1. Initializes logging to record verification progress and errors.
+2. Parses command-line arguments to optionally specify which runs to verify and whether to keep files with failed verification.
+3. Checks if the specified data directories and summary file exist; exits if not.
+4. Reads run information from the JSON summary file.
+5. Filters the runs based on the provided run numbers, if any.
+6. Defines a function to validate file integrity using MD5 checksums.
+7. Sets up a Dask bag with the list of runs to parallelize the verification process.
+8. Schedules the validate_file function for each run in the bag.
+9. Executes the verification tasks in parallel.
+10. Closes the Dask client and logs any fatal exceptions.
+
+Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+
+Example Usage:
+- Verify all downloaded runs:
+    python data_retrieval_verify.py
+
+- Verify specific runs (e.g., run numbers 1 and 2) and keep files with failed verification:
+    python data_retrieval_verify.py 1 2 --keep
+"""
+
 import os
 import json
 import logging
@@ -8,9 +46,7 @@ import dask.dataframe as dd
 import dask.bag as db
 from dask.distributed import Client, LocalCluster
 
-# TODO set these variables in single external file
-DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
-DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
+from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
 
 def main():
     # Initialise logging
@@ -68,7 +104,7 @@ def main():
         # Execute md5sum command and pipe output to this python script and select result
         result = subprocess.run(['md5sum', file_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
         md5_returned = result.stdout.split()[0]
-
+        
         # Check if calculated md5sum matches the provided one in the data summary file
         if not md5_returned == run["md5sum"]:
             logging.error(f"Validation of {run['name']} failed!")
@@ -78,7 +114,7 @@ def main():
                 os.remove(file_path)
             return
 
-        logging.info("Validation of {run['md5sum']} succeeded.")
+        logging.info(f"Validation of {run['md5sum']} succeeded.")
         return
 
     # Set up bag with runs

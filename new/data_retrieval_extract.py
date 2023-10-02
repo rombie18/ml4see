@@ -1,3 +1,40 @@
+"""
+data_retrieval_extract.py
+
+This Python script is designed to extract files from downloaded tar archives into a specified raw data directory. It provides options to extract files from specific runs and utilizes configuration constants from an external module for flexibility.
+
+Usage:
+    python data_retrieval_extract.py [run_numbers [run_numbers ...]]
+
+Arguments:
+    run_numbers (optional): A list of integers representing specific run numbers to extract. If provided, only the runs with matching numbers will be extracted.
+
+Configuration (imported from 'config.py'):
+    - DATA_DOWNLOAD_DIRECTORY: The directory where downloaded tar files are located.
+    - DATA_RAW_DIRECTORY: The directory where extracted raw data will be saved.
+
+The script performs the following steps:
+1. Initializes logging to record extraction progress and errors.
+2. Parses command-line arguments to optionally specify which runs to extract.
+3. Checks if the specified data directories exist; exits if not.
+4. Retrieves a list of downloaded tar files from the download directory.
+5. Filters the tar files based on the provided run numbers, if any.
+6. Defines a function to extract files from a tar archive and save them to the raw data directory.
+7. Sets up a Dask bag with the list of tar files to parallelize the extraction process.
+8. Schedules the untar_file function for each tar file in the bag.
+9. Executes the extraction tasks in parallel.
+10. Closes the Dask client and logs any fatal exceptions.
+
+Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+
+Example Usage:
+- Extract all downloaded runs:
+    python data_retrieval_extract.py
+
+- Extract specific runs (e.g., run numbers 1 and 2):
+    python data_retrieval_extract.py 1 2
+"""
+
 import os
 import logging
 import tarfile
@@ -7,9 +44,7 @@ import dask.dataframe as dd
 import dask.bag as db
 from dask.distributed import Client, LocalCluster
 
-# TODO set these variables in single external file
-DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
-DATA_RAW_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw"
+from config import DATA_DOWNLOAD_DIRECTORY, DATA_RAW_DIRECTORY
 
 def main():
     # Initialise logging

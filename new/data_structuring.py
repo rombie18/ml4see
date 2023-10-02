@@ -12,6 +12,7 @@ import numpy as np
 import scipy.signal as sps
 
 import util
+from config import DATA_RAW_DIRECTORY, DATA_RAW_GLASGOW_DIRECTORY, DATA_STRUCTURED_DIRECTORY
 
 """
 HDF5 file processing of runs is to be done in stages.
@@ -20,14 +21,6 @@ HDF5 file processing of runs is to be done in stages.
     The "processing_stage" attribute should be incremented for subsequent, dependent processing stages, so files can check
     for the required level of pre-processing having occured. A "processing_stage_X_version" attribute should be included.
 """
-
-# TODO set these variables in single external file
-DATA_RAW_SDR_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw"
-DATA_RAW_GLASGOW_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/raw/mcb2022_glasgow"
-DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
-# DATA_RAW_SDR_DIRECTORY = "../data/hdf5"
-# DATA_RAW_GLASGOW_DIRECTORY = "../data/glasgow"
-# DATA_STRUCTURED_DIRECTORY = "../data/hdf5"
 
 META_PROCESSING_STAGE = 1  # processing stage of generated HDF files
 META_STAGE_1_VERSION = "2.0"  # version string for this stage (stage 1)
@@ -250,7 +243,7 @@ def main():
 
     run_numbers = []
     if (len(args.run_numbers) == 0):
-        for dir in os.scandir(DATA_RAW_SDR_DIRECTORY):
+        for dir in os.scandir(DATA_RAW_DIRECTORY):
             if dir.is_dir():
                 if dir.path.split('/')[-1].startswith('run_'):
                     run_numbers.append(int(dir.path.split('/')[-1][4:]))
@@ -262,7 +255,7 @@ def main():
         try:
             print(f"** PROCESSING RUN {run_number:03d} **")
 
-            sdr_data_folders = DATA_RAW_SDR_DIRECTORY.split(":")
+            sdr_data_folders = DATA_RAW_DIRECTORY.split(":")
             glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
 
             # get run information from logbook

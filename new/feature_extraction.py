@@ -1,3 +1,41 @@
+"""
+feature_extraction.py
+
+This Python script is designed to perform feature extraction from raw data files and save the extracted features to CSV files. It utilizes the `tsfresh` library for feature extraction, Dask for parallel processing, and configuration constants imported from an external module for flexibility.
+
+Usage:
+    python feature_extraction.py [run_numbers [run_numbers ...]]
+
+Arguments:
+    run_numbers (optional): A list of integers representing specific run numbers to process and extract features from.
+
+Configuration (imported from 'config.py'):
+    - DATA_STRUCTURED_DIRECTORY: The directory where raw data files (in HDF5 format) are located.
+    - DATA_FEATURES_DIRECTORY: The directory where extracted features will be saved.
+    - FC_PARAMETERS: Feature extraction parameters (configured based on your requirements).
+    - WINDOW_SIZE: Size of the moving average window for filtering transient data.
+    - DOWNSAMPLE_FACTOR: Factor for downsampling time and frequency data.
+
+The script performs the following steps:
+1. Initializes logging to record feature extraction progress and errors.
+2. Parses command-line arguments to optionally specify which runs to process and extract features from.
+3. Sets Pandas options for better readability of output.
+4. Checks if the specified data directories exist; exits if not.
+5. Iterates through the provided run numbers, processing each run individually.
+6. Reads data from HDF5 files, applies filtering, downsampling, and prepares the data for feature extraction.
+7. Extracts features using the `tsfresh` library and saves them to CSV files.
+8. Closes the Dask client and logs any fatal exceptions.
+
+Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+
+Example Usage:
+- Extract features from all available runs:
+    python feature_extraction.py
+
+- Extract features from specific runs (e.g., run numbers 1 and 2):
+    python feature_extraction.py 1 2
+"""
+
 import os
 import logging
 import traceback
@@ -13,15 +51,15 @@ from dask.distributed import Client, LocalCluster
 from tsfresh.feature_extraction import extract_features
 from tsfresh.feature_extraction.settings import MinimalFCParameters, EfficientFCParameters, ComprehensiveFCParameters
 
-# TODO set these variables in single external file
-DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
-DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
+from config import DATA_STRUCTURED_DIRECTORY, DATA_FEATURES_DIRECTORY
 
 FC_PARAMETERS = ComprehensiveFCParameters()
 WINDOW_SIZE = 500
 DOWNSAMPLE_FACTOR = 250
 
+#TODO add beam position info to transient
 def load_transient(h5_path, tran_name, time_data):
+    #TODO try to find way to speed up reading transients from disk
     with h5py.File(h5_path, "r") as h5file:
         # Get transient samples
         tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
@@ -31,7 +69,7 @@ def load_transient(h5_path, tran_name, time_data):
         tran_data = np.convolve(tran_data, window, mode='valid')
                 
         # Adjust time data to match length of convoluted output
-        time_data = time_data[(len(window)-1):]
+        time_data = time_data[WINDOW_SIZE-1:]
 
         # Downsample time and frequency data
         time_data = time_data[::DOWNSAMPLE_FACTOR]

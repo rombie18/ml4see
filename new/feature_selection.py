@@ -1,14 +1,42 @@
+"""
+feature_selection.py
+
+This Python script is designed to perform feature selection based on relevance analysis using the `tsfresh` library. It reads feature data from CSV files, drops irrelevant features, and saves the relevance table to a CSV file. Configuration constants are imported from an external module for flexibility.
+
+Usage:
+    python feature_selection.py [run_numbers [run_numbers ...]]
+
+Arguments:
+    run_numbers (optional): A list of integers representing specific run numbers to perform feature selection on.
+
+Configuration (imported from 'config.py'):
+    - DATA_FEATURES_DIRECTORY: The directory where feature CSV files are located.
+
+The script performs the following steps:
+1. Initializes logging to record the feature selection process's progress and errors.
+2. Parses command-line arguments to optionally specify which runs to perform feature selection on.
+3. Checks if the specified features data directory exists; exits if not.
+4. Iterates through the provided run numbers, performing feature selection on each run individually.
+5. Reads feature data from CSV files, drops irrelevant features, and calculates the relevance table.
+6. Saves the relevance table to a CSV file and prints it.
+
+Example Usage:
+- Perform feature selection on all available runs:
+    python feature_selection.py
+
+- Perform feature selection on specific runs (e.g., run numbers 1 and 2):
+    python feature_selection.py 1 2
+"""
+
 import os
 import logging
 import traceback
 import argparse
 import numpy as np
 import pandas as pd
-
 from tsfresh.feature_selection.relevance import calculate_relevance_table
 
-# TODO set these variables in single external file
-DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
+from config import DATA_FEATURES_DIRECTORY
         
 def main():
     # Initialise logging

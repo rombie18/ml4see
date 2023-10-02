@@ -1,3 +1,42 @@
+"""
+data_retrieval_download.py
+
+This Python script is designed to download data files specified in a JSON summary file, providing options to download specific runs and handling failed downloads. It leverages configuration constants from an external module for flexibility.
+
+Usage:
+    python data_retrieval_download.py [run_numbers [run_numbers ...]] [--keep]
+
+Arguments:
+    run_numbers (optional): A list of integers representing specific run numbers to download. If provided, only the runs with matching numbers will be downloaded.
+    --keep (optional): If this flag is set, downloaded files will not be deleted in case of download failure.
+
+Configuration (imported from 'config.py'):
+    - DATA_DOWNLOAD_DIRECTORY: The directory where downloaded files will be saved.
+    - DATA_SUMMARY_PATH: The path to the JSON summary file containing information about the data runs.
+    - NETWORK_TIMEOUT: The maximum time (in seconds) to wait for a network response when downloading a file.
+
+The script performs the following steps:
+1. Initializes logging to record download progress and errors.
+2. Parses command-line arguments to optionally specify which runs to download and whether to keep failed downloads.
+3. Checks if the specified data directories and summary file exist; exits if not.
+4. Reads run information from the JSON summary file.
+5. Filters the runs based on the provided run numbers, if any.
+6. Defines a function to download a file from a given URL and saves it to the download directory.
+7. Sets up a Dask bag with the list of runs to parallelize the download process.
+8. Schedules the download_file function for each run in the bag.
+9. Executes the download tasks in parallel.
+10. Closes the Dask client and logs any fatal exceptions.
+
+Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+
+Example Usage:
+- Download all runs:
+    python data_retrieval_download.py
+
+- Download specific runs (e.g., run numbers 1 and 2) and keep failed downloads:
+    python data_retrieval_download.py 1 2 --keep
+"""
+
 import os
 import requests
 import json
@@ -8,10 +47,7 @@ import dask.dataframe as dd
 import dask.bag as db
 from dask.distributed import Client, LocalCluster
 
-# TODO set these variables in single external file
-DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"
-DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
-NETWORK_TIMEOUT = 1200
+from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH, NETWORK_TIMEOUT
 
 def main():
     # Initialise logging

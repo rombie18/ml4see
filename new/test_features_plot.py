@@ -2,7 +2,8 @@ import pandas as pd
 import os
 import matplotlib.pyplot as plt
 
-DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
+from config import DATA_FEATURES_DIRECTORY
+
 FEATURE= 'frequency__index_mass_quantile__q_0.1'
 
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, "run_029.csv")
