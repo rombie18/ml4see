@@ -1,6 +1,0 @@
-inquirer
-numpy
-matplotlib
-h5py
-dask
-tsfresh
