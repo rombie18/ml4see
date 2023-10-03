@@ -4,10 +4,12 @@ import matplotlib.pyplot as plt
 import h5py
 import numpy as np
 from scipy import signal
+from scipy.optimize import curve_fit
 
-DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/structured"
-RUN_NUMBER = 18
-TRAN_NUMBER = 112
+from config import DATA_STRUCTURED_DIRECTORY
+
+RUN_NUMBER = 29
+TRAN_NUMBER = 1
 
 def moving_average(tran_data, time_data, downsample_factor, window_size):
     # Apply moving average filter
@@ -23,6 +25,11 @@ def moving_average(tran_data, time_data, downsample_factor, window_size):
     
     return tran_data, time_data
 
+def exponential_decay(t, N, λ, c):
+    return N * np.exp(-λ * t) + c
+
+def double_exponential_decay(t, Nf, Ns, λf, λs, c):
+        return Nf * np.exp(-λf * t) + Ns * np.exp(-λs * t) + c
 
 h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{RUN_NUMBER:03d}.h5")
 with h5py.File(h5_path, "r") as h5file:
@@ -47,12 +54,31 @@ with h5py.File(h5_path, "r") as h5file:
     downsample_factor = 250
     tran_data_processed, time_data_processed = moving_average(transient_data, time_data, downsample_factor, window_size)
     
+    # Try to fit exponential decay
+    max_index = np.argmax(tran_data_processed)
+    time_data_processed_exp = time_data_processed[max_index:]
+    tran_data_processed_exp = tran_data_processed[max_index:]
+    params, _ = curve_fit(
+        exponential_decay, time_data_processed_exp, tran_data_processed_exp, p0=(35000, 10000, 212500), bounds=([0, 10, 0], [1e8, 6.5e5, 1e6])
+    )
+    params_double, _ = curve_fit(
+        double_exponential_decay, time_data_processed_exp, tran_data_processed_exp, p0=(35000, 35000, 10000, 100, 20000), bounds=([0, 0, 1000, 0, 0], [1e8, 1e8, 1e5, 1e4, 1e6])
+    )
+        
     # Plot results
     figure, axis = plt.subplots(1, 1)
     
     axis.plot(time_data, transient_data, '.')
     axis.plot(time_data_processed, tran_data_processed, '.-')
+    axis.plot(time_data_processed_exp, exponential_decay(time_data_processed_exp, *params), 'c-', linewidth=3)
+    axis.plot(time_data_processed_exp, double_exponential_decay(time_data_processed_exp, *params_double), 'm-', linewidth=3)
     axis.set_title(f"Moving Average (tran_{TRAN_NUMBER:06d})")
+    
+    min = np.min(tran_data_processed)
+    min = min / 1.05
+    max = np.max(tran_data_processed)
+    max = max * 1.05
+    axis.set_ylim(min, max)
     
     # Visualize window size
     # for point in time_data[::window_size]:
@@ -60,4 +86,4 @@ with h5py.File(h5_path, "r") as h5file:
 
     # Set figure size and save
     figure.set_size_inches(18.5, 10.5)
-    plt.savefig("test.png")
+    plt.savefig(f"test_tran_{TRAN_NUMBER:06d}.png")

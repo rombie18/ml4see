@@ -43,12 +43,13 @@ import h5py
 import argparse
 import numpy as np
 import pandas as pd
+from scipy.optimize import curve_fit
 
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
 
-from tsfresh.feature_extraction import extract_features
+from tsfresh.feature_extraction import extract_features, feature_calculators
 from tsfresh.feature_extraction.settings import MinimalFCParameters, EfficientFCParameters, ComprehensiveFCParameters
 
 from config import DATA_STRUCTURED_DIRECTORY, DATA_FEATURES_DIRECTORY
@@ -83,7 +84,7 @@ def process_transient(df):
     
     # Remove NaN 'probe' data since it is causing issues with feature extraction
     df = df[df['transient'].notna()]
-    
+        
     # Extract features of single transient
     # TODO use multiprocessing here dependant on how many thread this worker has available
     feature_df = extract_features(
@@ -92,7 +93,8 @@ def process_transient(df):
         column_sort="time",
         n_jobs=0,
         default_fc_parameters=FC_PARAMETERS,
-        disable_progressbar=True
+        disable_progressbar=True,
+        show_warnings=False
     )
     
     # Set tranient column as index
@@ -100,7 +102,58 @@ def process_transient(df):
     feature_df.transient = feature_df.transient.astype('category')
     feature_df.set_index('transient')
     
+    # Extract single exponential decay parameters and add to dataframe
+    params = fit_single_exponential_decay(df['frequency'], df['time'])
+    for param_name, param_value in params.items():
+        feature_df[param_name] = [param_value]
+    
+    # Extract double exponential decay parameters and add to dataframe
+    params = fit_double_exponential_decay(df['frequency'], df['time'])
+    for param_name, param_value in params.items():
+        feature_df[param_name] = [param_value]
+        
     return feature_df
+
+
+def fit_double_exponential_decay(freq_data, time_data):
+    def double_exponential_decay(t, Nf, Ns, λf, λs, c):
+        return Nf * np.exp(-λf * t) + Ns * np.exp(-λs * t) + c
+       
+    start_index = np.argmax(freq_data)
+    time_data = time_data[start_index:]
+    freq_data = freq_data[start_index:]
+    
+    #TODO limit boundries to fast and slow 
+    params, _ = curve_fit(
+        double_exponential_decay, time_data, freq_data, p0=(35000, 35000, 10000, 100, 20000), bounds=([0, 0, 1000, 0, 0], [1e8, 1e8, 1e5, 1e4, 1e6])
+    )
+    
+    return {
+        "fit_double_exponential_decay__Nf": params[0],
+        "fit_double_exponential_decay__Ns": params[1],
+        "fit_double_exponential_decay__λf": params[2],
+        "fit_double_exponential_decay__λs": params[3],
+        "fit_double_exponential_decay__c": params[4],
+    }
+    
+def fit_single_exponential_decay(freq_data, time_data):
+    def single_exponential_decay(t, N, λ, c):
+        return N * np.exp(-λ * t) + c
+       
+    start_index = np.argmax(freq_data)
+    time_data = time_data[start_index:]
+    freq_data = freq_data[start_index:]
+    
+    params, _ = curve_fit(
+        single_exponential_decay, time_data, freq_data, p0=(35000, 5000, 20000), bounds=([0, 0, 0], [1e8, 1e5, 1e6])
+    )
+    
+    return {
+        "fit_single_exponential_decay__N": params[0],
+        "fit_single_exponential_decay__λ": params[1],
+        "fit_single_exponential_decay__c": params[2],
+    }
+    
         
 def main():
     # Initialise logging
@@ -157,6 +210,7 @@ def main():
             transient_tasks = []
             for tran_name in transients.keys():
                 transient_tasks.append(dask.delayed(load_transient)(h5_path, tran_name, time_data_future))
+            # transient_tasks.append(dask.delayed(load_transient)(h5_path, "tran_000000", time_data_future))
 
             # Set up task to merge all transients into single Dask dataframe
             transients_task = dd.from_delayed(transient_tasks)

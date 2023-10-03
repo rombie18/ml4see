@@ -11,7 +11,6 @@ import pandas as pd
 import numpy as np
 import scipy.signal as sps
 
-import util
 from config import DATA_RAW_DIRECTORY, DATA_RAW_GLASGOW_DIRECTORY, DATA_STRUCTURED_DIRECTORY
 
 """
@@ -69,6 +68,28 @@ SDR_ATTR_LIST = [
     ("sdr_info_cf", float),
     ("sdr_info_fs", float),
 ]
+
+
+"""Various utility methods"""
+def chunker(seq, size):
+    """Helper method for iterating over chunks of a list"""
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))
+
+
+def require_processing_stage(h5file, stage_req, strict=False):
+    """Raises an exception when a file does not undergone the required level of processing."""
+    file_stage = int(h5file["meta"].attrs["processing_stage"])
+
+    if not strict:
+        if file_stage < stage_req:
+            raise ValueError(
+                f"HDF file is not at required level of processing. Found: {file_stage}; Required: >={stage_req}."
+            )
+    else:
+        if file_stage != stage_req:
+            raise ValueError(
+                f"HDF file is not at required level of processing. Found: {file_stage}; Required: =={stage_req}."
+            )
 
 
 class SDREventProcessor:
@@ -181,7 +202,7 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
     #  - we want to parallelize the DSP
     #  - parallel writes to the HDF datafile are not thread-safe
     #  - we only have finite amounts of RAM, so we can't process all transients before storing them
-    for chunk_id, chunk in enumerate(util.chunker(file_dicts, chunk_size)):
+    for chunk_id, chunk in enumerate(chunker(file_dicts, chunk_size)):
         print(f"  Processing chunk {chunk_id + 1}/{num_chunks}...")
         # extract frequency information
         freqs = pool.map(dsp.file_to_freq, [entry["fname"] for entry in chunk])
