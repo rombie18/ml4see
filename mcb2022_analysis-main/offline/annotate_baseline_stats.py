@@ -12,6 +12,8 @@ import util
 META_PROCESSING_STAGE = 2  # processing stage after completing this stage
 META_STAGE_2_VERSION = "2.0"  # version string for this stage (stage 2)
 
+#TODO move this script into processing pipeline
+
 # main changes
 # v1.0: baseline heuristics annotation (mean, std, std-of-mean, std-of-std) and outlier scoring
 # v2.0: fix baseline stats misattribution, compatibility with stage 1 v2.0

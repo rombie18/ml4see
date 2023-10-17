@@ -2,15 +2,20 @@ import os
 import pandas as pd
 import numpy as np
 import seaborn as sns
+import argparse
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 from config import DATA_FEATURES_DIRECTORY
 
-RUN_NUMBER = 7
+# Initialise argument parser
+parser = argparse.ArgumentParser()
+parser.add_argument("run_number", type=int)
+args = parser.parse_args()
+run_number = args.run_number
 
-csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
+csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
 df = pd.read_csv(csv_path)
 
 # Only retain numeric columns with no NaN values
@@ -69,7 +74,7 @@ for i, varnames in enumerate(feature_names):
         head_width=0.01,
         alpha=0.3,
     )
-#  plt.text(xs[i], ys[i], varnames)
+plt.text(xs[i], ys[i], varnames)
 
 xticks = np.linspace(-0.8, 0.8, num=5)
 yticks = np.linspace(-0.8, 0.8, num=5)
@@ -78,6 +83,6 @@ plt.yticks(yticks)
 plt.xlabel("PC1")
 plt.ylabel("PC2")
 
-plt.title(f"2D Biplot, run_{RUN_NUMBER:03d}")
+plt.title(f"2D Biplot, run_{run_number:03d}")
 
 plt.savefig(f"plots/pca.png", bbox_inches='tight')

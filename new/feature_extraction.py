@@ -131,6 +131,8 @@ def load_transient(h5_path, tran_name, time_data):
 def process_transient(df):
     # Remove NaN 'probe' data since it is causing issues with feature extraction
     df = df[df["transient"].notna()]
+    
+    # TODO use delta frequence -> subtract baseline freq from h5 files
 
     # Extract features of single transient
     # TODO use multiprocessing here dependant on how many thread this worker has available

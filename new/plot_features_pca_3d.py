@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 
 from config import DATA_FEATURES_DIRECTORY
 
-N_COMPONENTS = 3
+N_COMPONENTS = 5
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
