@@ -9,8 +9,9 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 from config import DATA_FEATURES_DIRECTORY
+from utils import generatePlotTitle
 
-N_COMPONENTS = 5
+N_COMPONENTS = 3
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
@@ -58,6 +59,7 @@ for index in scaler.index:
 # Initialize the 3D graph
 fig = plt.figure()
 ax = fig.add_subplot(111, projection="3d")
+ax.view_init(elev=45., azim=60)
 
 # Define scaled features as arrays
 xdata = pca_df_scaled["PC1"]
@@ -83,7 +85,7 @@ else:
 #             xdata[i], ydata[i], zdata[i], pca_df_scaled["transient"][i], fontsize='small'
 #         )
 
-ax.scatter3D(xdata, ydata, zdata, c=cmap, alpha=0.5)
+ax.scatter(xdata, ydata, zdata, c=cmap, alpha=0.5)
 
 # Define the x, y, z variables
 loadings = pca.components_
@@ -97,11 +99,18 @@ y_arr = z_arr = x_arr
 ax.quiver(x_arr, y_arr, z_arr, xs, ys, zs, color="gray", alpha=0.3)
 
 # Plot title of graph
-plt.title(f"3D Biplot, run_{run_number:03d}")
+generatePlotTitle(ax, f"3D Biplot, run_{run_number:03d}", run_number)
+
+xticks = np.linspace(-1, 1, num=5)
+yticks = np.linspace(-1, 1, num=5)
+zticks = np.linspace(-1, 1, num=5)
+ax.set_xticks(xticks)
+ax.set_yticks(yticks)
+ax.set_zticks(zticks)
 
 # Plot x, y, z labels
 ax.set_xlabel("PC1")
 ax.set_ylabel("PC2")
 ax.set_zlabel("PC3")
 
-plt.savefig(f"plots/pca_3d.png")
+plt.savefig(f"plots/pca_3d.png", bbox_inches="tight")

@@ -1,7 +1,9 @@
-NETWORK_TIMEOUT = 1200
+NETWORK_TIMEOUT = 24 * 60 * 60
 
 WINDOW_SIZE = 500
 DOWNSAMPLE_FACTOR = 250
+
+RUN_LOGBOOK_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/logbook/mcb2022_logbook.xlsx"
 
 DATA_SUMMARY_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/data_retrieval_download.json"
 DATA_DOWNLOAD_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/download"

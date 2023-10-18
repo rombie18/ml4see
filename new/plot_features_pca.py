@@ -8,6 +8,7 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 from config import DATA_FEATURES_DIRECTORY
+from utils import generatePlotTitle
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
@@ -55,17 +56,13 @@ xs = loadings[0]
 ys = loadings[1]
 
 # Plot result
-sns.lmplot(
-    x="PC1",
-    y="PC2",
-    data=pca_df_scaled,
-    hue='valid', 
-    fit_reg=False, 
-    legend=True
+fig, ax = plt.subplots()
+sns.scatterplot(
+    x="PC1", y="PC2", data=pca_df_scaled, hue="valid", legend=True, ax=ax
 )
 
 for i, varnames in enumerate(feature_names):
-    plt.arrow(
+    ax.arrow(
         0,
         0,  # coordinates of arrow base
         xs[i],  # length of the arrow along x
@@ -74,15 +71,15 @@ for i, varnames in enumerate(feature_names):
         head_width=0.01,
         alpha=0.3,
     )
-plt.text(xs[i], ys[i], varnames)
+# plt.text(xs[i], ys[i], varnames)
 
-xticks = np.linspace(-0.8, 0.8, num=5)
-yticks = np.linspace(-0.8, 0.8, num=5)
-plt.xticks(xticks)
-plt.yticks(yticks)
-plt.xlabel("PC1")
-plt.ylabel("PC2")
+xticks = np.linspace(-1, 1, num=5)
+yticks = np.linspace(-1, 1, num=5)
+ax.set_xticks(xticks)
+ax.set_yticks(yticks)
+ax.set_xlabel("PC1")
+ax.set_ylabel("PC2")
 
-plt.title(f"2D Biplot, run_{run_number:03d}")
+generatePlotTitle(ax, "2D Biplot - PCA", run_number)
 
-plt.savefig(f"plots/pca.png", bbox_inches='tight')
+plt.savefig(f"plots/pca.png", bbox_inches="tight")
