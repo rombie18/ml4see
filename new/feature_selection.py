@@ -55,6 +55,7 @@ def main():
     parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
     args = parser.parse_args()
 
+    #TODO maybe move directory and file checks to config file?
     # Check if directories exist
     if not os.path.exists(DATA_FEATURES_DIRECTORY):
         logging.error(f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}.")

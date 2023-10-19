@@ -3,8 +3,9 @@ import os
 import matplotlib.pyplot as plt
 
 from config import DATA_FEATURES_DIRECTORY
+from utils import generatePlotTitle
 
-RUN_NUMBER = 18
+RUN_NUMBER = 29
 MARK_TRANSIENTS = ["tran_000026", "tran_000054"]
 FEATURE_1 = 'fit_double_exponential_decay__Nf'
 FEATURE_2 = 'fit_double_exponential_decay__λf'
@@ -20,5 +21,5 @@ ax = df.plot.scatter(x=FEATURE_1, y=FEATURE_2)
 #     if len(MARK_TRANSIENTS) == 0 or txt in ["tran_000026", "tran_000054"]:
 #         ax.annotate(txt, (df[FEATURE_1][i], df[FEATURE_2][i]))
 
-plt.title(f"run_{RUN_NUMBER:03d}") 
-plt.savefig(f"plots/run_{RUN_NUMBER:03d}_{FEATURE_1}___{FEATURE_2}.png")
+generatePlotTitle(ax, "Feature Comparsion Plot", RUN_NUMBER)
+plt.savefig(f"plots/run_{RUN_NUMBER:03d}_{FEATURE_1}___{FEATURE_2}.png", bbox_inches="tight")

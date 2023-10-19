@@ -7,8 +7,6 @@ from config import DATA_FEATURES_DIRECTORY
 
 RUN_NUMBER = 7
 
-#TODO add beam moving or stationary to axis
-
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
 df = pd.read_csv(csv_path)
 

@@ -1,10 +1,11 @@
+import os
 import pandas as pd
 import matplotlib.axes
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
-from config import RUN_LOGBOOK_PATH
+from config import RUN_LOGBOOK_PATH, RUN_DUTPICS_DIRECTORY
 
 
 def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
@@ -32,9 +33,9 @@ def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
             fontsize="small",
         )
 
-        #TODO move dut image path into config file
         imagebox_full = OffsetImage(
-            mpimg.imread(f"dut_position_pics/{dut_position}_5x.tif"), zoom=0.2
+            mpimg.imread(os.path.join(RUN_DUTPICS_DIRECTORY, f"{dut_position}_5x.tif")),
+            zoom=0.2,
         )
         ab_full = AnnotationBbox(
             imagebox_full,
@@ -46,7 +47,9 @@ def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
 
         try:
             imagebox_detail = OffsetImage(
-                mpimg.imread(f"dut_position_pics/{dut_position}_50x.tif"),
+                mpimg.imread(
+                    os.path.join(RUN_DUTPICS_DIRECTORY, f"{dut_position}_50x.tif")
+                ),
                 zoom=0.2,
             )
             ab_detail = AnnotationBbox(

@@ -4,11 +4,10 @@ import matplotlib.pyplot as plt
 import random
 
 from config import DATA_FEATURES_DIRECTORY
+from utils import generatePlotTitle
 
-RUN_NUMBER = 7
+RUN_NUMBER = 29
 FEATURE = 'fit_single_exponential_decay__N'
-
-#TODO add beam moving or stationary to axis
 
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
 df = pd.read_csv(csv_path)
@@ -21,5 +20,5 @@ for i, txt in enumerate(df["transient"]):
     if random.random() < 0.05:
         ax.annotate(txt, (df["transient"][i], df[FEATURE][i]))
 
-plt.title(f"run_{RUN_NUMBER:03d}") 
-plt.savefig(f"plots/run_{RUN_NUMBER:03d}_{FEATURE}.png")
+generatePlotTitle(ax, "Single Feature Plot", RUN_NUMBER)
+plt.savefig(f"plots/run_{RUN_NUMBER:03d}_{FEATURE}.png", bbox_inches="tight")
