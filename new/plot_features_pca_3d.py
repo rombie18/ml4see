@@ -7,8 +7,9 @@ import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
+from matplotlib.colors import from_levels_and_colors
 
-from config import DATA_FEATURES_DIRECTORY
+from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
 from utils import generatePlotTitle
 
 N_COMPONENTS = 3
@@ -19,8 +20,10 @@ parser.add_argument("run_number", type=int)
 args = parser.parse_args()
 run_number = args.run_number
 
-csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
-df = pd.read_csv(csv_path)
+df_features = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+df_labeled = pd.read_csv(os.path.join(DATA_LABELED_DIRECTORY, f"run_{run_number:03d}.csv"))
+df = pd.merge(df_features, df_labeled, on='transient')
+df.type = df.type.astype("category")
 
 # Only retain numeric columns with no NaN values
 df_cleaned = df.dropna(axis=1)
@@ -44,7 +47,7 @@ print(
 )
 
 # Map target names to PCA features
-df_pca["valid"] = df["valid"]
+df_pca["type"] = df["type"]
 df_pca["transient"] = df["transient"]
 
 # Scale PCS into a DataFrame
@@ -67,16 +70,10 @@ ydata = pca_df_scaled["PC2"]
 zdata = pca_df_scaled["PC3"]
 
 # Plot 3D scatterplot of PCA
-cmap = []
-valid_points = [valid_point for valid_point in pca_df_scaled["valid"]]
-if valid_points.count(False) > 0:
-    for valid_point in valid_points:
-        if valid_point == True:
-            cmap.append("green")
-        else:
-            cmap.append("red")
-else:
-    cmap.extend(np.repeat("royalblue", len(valid_points)))
+color_labels = pca_df_scaled["type"].unique()
+col_values = sns.color_palette(n_colors=len(color_labels))
+color_map = dict(zip(color_labels, col_values))
+colors = [color_map[label] for label in df['type'].values]
 
 # Add transient names to plot
 # for i in range(len(xdata)):
@@ -85,7 +82,7 @@ else:
 #             xdata[i], ydata[i], zdata[i], pca_df_scaled["transient"][i], fontsize='small'
 #         )
 
-ax.scatter(xdata, ydata, zdata, c=cmap, alpha=0.5)
+ax.scatter(xdata, ydata, zdata, c=colors, alpha=0.5)
 
 # Define the x, y, z variables
 loadings = pca.components_

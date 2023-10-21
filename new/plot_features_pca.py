@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
-from config import DATA_FEATURES_DIRECTORY
+from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
 from utils import generatePlotTitle
 
 # Initialise argument parser
@@ -16,8 +16,10 @@ parser.add_argument("run_number", type=int)
 args = parser.parse_args()
 run_number = args.run_number
 
-csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
-df = pd.read_csv(csv_path)
+df_features = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+df_labeled = pd.read_csv(os.path.join(DATA_LABELED_DIRECTORY, f"run_{run_number:03d}.csv"))
+df = pd.merge(df_features, df_labeled, on='transient')
+df.type = df.type.astype("category")
 
 # Only retain numeric columns with no NaN values
 df_cleaned = df.dropna(axis=1)
@@ -40,7 +42,7 @@ print(
 )
 
 # Map target names to PCA features
-df_pca["valid"] = df["valid"]
+df_pca["type"] = df["type"]
 
 # Scale PCS into a DataFrame
 pca_df_scaled = df_pca.copy()
@@ -58,7 +60,7 @@ ys = loadings[1]
 # Plot result
 fig, ax = plt.subplots()
 sns.scatterplot(
-    x="PC1", y="PC2", data=pca_df_scaled, hue="valid", legend=True, ax=ax
+    x="PC1", y="PC2", data=pca_df_scaled, hue="type", legend=True, ax=ax
 )
 
 for i, varnames in enumerate(feature_names):

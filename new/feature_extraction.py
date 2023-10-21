@@ -131,7 +131,7 @@ def load_transient(h5_path, tran_name, time_data):
 def process_transient(df):
     # Remove NaN 'probe' data since it is causing issues with feature extraction
     df = df[df["transient"].notna()]
-    
+
     # TODO use delta frequence -> subtract baseline freq from h5 files
 
     # Extract features of single transient
@@ -318,9 +318,6 @@ def main():
 
             # Execute above tasks
             features: pd.DataFrame = features_task.compute()
-
-            # Add valid column for feature significance testing
-            features.insert(1, "valid", True)
 
             # Save extracted features to csv file
             features.to_csv(
