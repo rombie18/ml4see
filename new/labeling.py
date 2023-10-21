@@ -1,11 +1,8 @@
 import os
 import pandas as pd
 import numpy as np
-import seaborn as sns
 import argparse
 import h5py
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 
 from config import (
@@ -14,7 +11,7 @@ from config import (
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
 )
-from utils import generatePlotTitle
+from utils import generatePlotTitle, require_processing_stage
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
@@ -37,6 +34,9 @@ except:
 
 h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
 with h5py.File(h5_path, "r") as h5file:
+    # Check if file is up to required processing stage
+    require_processing_stage(h5file, 2, strict=True)
+
     # Get run number and transients from file
     run_num = h5file["meta"].attrs["run_id"]
     transients = h5file["sdr_data"]["all"]
@@ -58,10 +58,11 @@ with h5py.File(h5_path, "r") as h5file:
 
         tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
 
-        # Convert transient data to Pandas dataframe
-        df = pd.DataFrame.from_dict(
-            {"transient": tran_name, "time": time_data, "frequency": tran_data}
-        )
+        # Subtract mean baseline frequency from each sample to get delta frequency
+        baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
+            "baseline_freq_mean_hz"
+        ]
+        tran_data = np.subtract(tran_data, baseline_freq)
 
         # Apply moving average filter
         window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
@@ -86,7 +87,7 @@ with h5py.File(h5_path, "r") as h5file:
             linewidth=2,
         )
         ax.set_xlabel("Time (s)")
-        ax.set_ylabel("Frequency (Hz)")
+        ax.set_ylabel("Delta frequency (Hz)")
 
         generatePlotTitle(ax, f"Transient {tran_name} - downsampled", run_number)
 

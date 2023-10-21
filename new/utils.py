@@ -65,3 +65,19 @@ def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
     except:
         # Fall back to run number only on fail
         ax.set_title(f"run_{run_number:03d}", fontsize="small")
+
+
+def require_processing_stage(h5file, stage_req, strict=False):
+    """Raises an exception when a file does not undergone the required level of processing."""
+    file_stage = int(h5file["meta"].attrs["processing_stage"])
+
+    if not strict:
+        if file_stage < stage_req:
+            raise ValueError(
+                f"HDF file is not at required level of processing. Found: {file_stage}; Required: >={stage_req}."
+            )
+    else:
+        if file_stage != stage_req:
+            raise ValueError(
+                f"HDF file is not at required level of processing. Found: {file_stage}; Required: =={stage_req}."
+            )

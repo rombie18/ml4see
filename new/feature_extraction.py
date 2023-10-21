@@ -38,7 +38,6 @@ Example Usage:
 
 import os
 import logging
-import traceback
 import h5py
 import argparse
 import numpy as np
@@ -49,13 +48,7 @@ import dask
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
 
-from tsfresh.feature_extraction import extract_features, feature_calculators
-from tsfresh.feature_extraction.settings import (
-    MinimalFCParameters,
-    EfficientFCParameters,
-    ComprehensiveFCParameters,
-    IndexBasedFCParameters,
-)
+from tsfresh.feature_extraction import extract_features
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
@@ -63,7 +56,7 @@ from config import (
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
 )
-
+from utils import require_processing_stage
 
 FC_PARAMETERS = {
     "mean": None,
@@ -75,6 +68,7 @@ FC_PARAMETERS = {
     "abs_energy": None,
     "skewness": None,
     "kurtosis": None,
+    "sum_values": None,
     "quantile": [{"q": 0.05}, {"q": 0.25}, {"q": 0.75}, {"q": 0.95}],
     "cid_ce": [{"normalize": True}, {"normalize": False}],
     "quantile": [{"q": q} for q in [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]],
@@ -102,13 +96,20 @@ FC_PARAMETERS = {
     ],
 }
 
-
 # TODO add beam position info to transient
+
+
 def load_transient(h5_path, tran_name, time_data):
     # TODO try to find way to speed up reading transients from disk
     with h5py.File(h5_path, "r") as h5file:
         # Get transient samples
         tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
+
+        # Subtract mean baseline frequency from each sample to get delta frequency
+        baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
+            "baseline_freq_mean_hz"
+        ]
+        tran_data = np.subtract(tran_data, baseline_freq)
 
         # Apply moving average filter
         window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
@@ -282,6 +283,9 @@ def main():
                     f"Skipping run_{run_number:03d} since it has no transients (sdr_data)."
                 )
                 continue
+
+            # Check if file is up to required processing stage
+            require_processing_stage(h5file, 2, strict=True)
 
             # Get run number and transients from file
             run_num = h5file["meta"].attrs["run_id"]
