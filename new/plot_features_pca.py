@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import argparse
+import random
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
@@ -63,7 +64,8 @@ sns.scatterplot(
     x="PC1", y="PC2", data=pca_df_scaled, hue="type", legend=True, ax=ax
 )
 
-for i, varnames in enumerate(feature_names):
+varnames = {}
+for i, varname in enumerate(feature_names):
     ax.arrow(
         0,
         0,  # coordinates of arrow base
@@ -73,7 +75,9 @@ for i, varnames in enumerate(feature_names):
         head_width=0.01,
         alpha=0.3,
     )
-# plt.text(xs[i], ys[i], varnames)
+    varnames[varname] = (xs[i] ** 2 + ys[i] ** 2) ** 0.5
+    
+print(sorted(varnames, reverse=True))
 
 xticks = np.linspace(-1, 1, num=5)
 yticks = np.linspace(-1, 1, num=5)

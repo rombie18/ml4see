@@ -1,9 +1,9 @@
 import os
 import pandas as pd
 import argparse
-from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.metrics import classification_report
 from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
 
 from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
 
@@ -28,10 +28,10 @@ X = df_cleaned
 y = df['type']
 
 # Split data into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 # Train classifier
-clf = GradientBoostingClassifier(n_estimators=100)
+clf = RandomForestClassifier(n_estimators=100)
 clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)

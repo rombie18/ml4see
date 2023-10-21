@@ -7,11 +7,8 @@ from sklearn.decomposition import PCA
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-from sklearn.inspection import DecisionBoundaryDisplay
 
 from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
-from utils import generatePlotTitle
 
 N_COMPONENTS = 10
 

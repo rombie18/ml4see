@@ -72,20 +72,11 @@ FC_PARAMETERS = {
     "quantile": [{"q": 0.05}, {"q": 0.25}, {"q": 0.75}, {"q": 0.95}],
     "cid_ce": [{"normalize": True}, {"normalize": False}],
     "quantile": [{"q": q} for q in [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]],
-    "autocorrelation": [{"lag": lag} for lag in range(10)],
     "number_cwt_peaks": [{"n": n} for n in [1, 5]],
     "number_peaks": [{"n": n} for n in [1, 3, 5, 10, 50]],
-    "binned_entropy": [{"max_bins": max_bins} for max_bins in [10]],
     "index_mass_quantile": [{"q": q} for q in [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]],
-    "fft_aggregated": [
-        {"aggtype": s} for s in ["centroid", "variance", "skew", "kurtosis"]
-    ],
-    "energy_ratio_by_chunks": [
-        {"num_segments": 10, "segment_focus": i} for i in range(10)
-    ],
     "ratio_beyond_r_sigma": [{"r": x} for x in [0.5, 1, 1.5, 2, 2.5, 3, 5, 6, 7, 10]],
     "lempel_ziv_complexity": [{"bins": x} for x in [2, 3, 5, 10, 100]],
-    "fourier_entropy": [{"bins": x} for x in [2, 3, 5, 10, 100]],
     "permutation_entropy": [{"tau": 1, "dimension": x} for x in [3, 4, 5, 6, 7]],
     "mean_n_absolute_max": [
         {
