@@ -77,8 +77,6 @@ for i, varname in enumerate(feature_names):
     )
     varnames[varname] = (xs[i] ** 2 + ys[i] ** 2) ** 0.5
     
-print(sorted(varnames, reverse=True))
-
 xticks = np.linspace(-1, 1, num=5)
 yticks = np.linspace(-1, 1, num=5)
 ax.set_xticks(xticks)
