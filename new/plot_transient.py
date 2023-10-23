@@ -68,6 +68,6 @@ with h5py.File(h5_path, "r") as h5file:
     )
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Delta frequency (Hz)")
-
+    
     generatePlotTitle(ax, f"Transient {tran_name} - downsampled", run_number)
     plt.savefig(f"plots/run_{run_number:03d}_{tran_name}.png", bbox_inches="tight")

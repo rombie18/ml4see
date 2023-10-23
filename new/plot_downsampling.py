@@ -23,19 +23,21 @@ def moving_average(tran_data, time_data, downsample_factor, window_size):
     return tran_data, time_data
 
 def max_values_in_bins(timestamps, values, num_bins):
-    # Calculate the bin size
-    bin_size = (timestamps[-1] - timestamps[0]) / num_bins
-    
+    # Calculate the bin size based on num_bins symetric around zero point
+    #TODO find better way to select zero index
+    zero_timestamp = np.where(np.isclose(timestamps, 0, atol=1e-5))[0][0]
+    bin_size = 2 * (timestamps[zero_timestamp] - timestamps[0]) / num_bins
+
     # Calculate the bin edges
     bin_edges = [timestamps[0] + i * bin_size for i in range(num_bins + 1)]
-    
+
     # Compute the histogram
     bin_indices = np.digitize(timestamps, bin_edges)
-    
+
     # Initialize variables to store sums and last timestamps
     bin_maxs = []
     last_timestamps = []
-    
+
     # Iterate through the bins
     for bin_num in range(1, num_bins + 1):
         mask = bin_indices == bin_num
@@ -43,12 +45,7 @@ def max_values_in_bins(timestamps, values, num_bins):
         last_timestamp = timestamps[mask][-1] if np.any(mask) else None
         bin_maxs.append(bin_max)
         last_timestamps.append(last_timestamp)
-        
-    # Normalize the bin sums to the range [0, 1]
-    # max_sum = np.max(bin_maxs)
-    # min_sum = np.min(bin_maxs)
-    # normalized_bin_maxs = [(x - min_sum) / (max_sum - min_sum) for x in bin_maxs]
-    
+
     return bin_maxs, last_timestamps
         
 def exponential_decay(t, N, λ, c):
@@ -129,8 +126,8 @@ with h5py.File(h5_path, "r") as h5file:
     axis.plot(time_data, tran_data, ".")
     axis.plot(time_data_processed, tran_data_processed, ".-")
 
-    bin_maxs, last_timestamps = max_values_in_bins(time_data_processed, tran_data_processed, 100)
-    axis.plot(last_timestamps, bin_maxs, "ro")
+    bin_maxs, last_timestamps = max_values_in_bins(time_data_processed, tran_data_processed, 8)
+    axis.step(last_timestamps, bin_maxs, "r-", linewidth=3)
 
     try:
         axis.plot(

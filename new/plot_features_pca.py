@@ -64,6 +64,10 @@ sns.scatterplot(
     x="PC1", y="PC2", data=pca_df_scaled, hue="type", legend=True, ax=ax
 )
 
+for i, txt in enumerate(df["transient"]):
+    if random.random() < 0.5:
+        ax.annotate(txt, (pca_df_scaled["PC1"][i], pca_df_scaled["PC2"][i]))
+
 varnames = {}
 for i, varname in enumerate(feature_names):
     ax.arrow(
@@ -76,6 +80,8 @@ for i, varname in enumerate(feature_names):
         alpha=0.3,
     )
     varnames[varname] = (xs[i] ** 2 + ys[i] ** 2) ** 0.5
+
+print({k: v for k, v in sorted(varnames.items(), key=lambda item: item[1], reverse=True)})
     
 xticks = np.linspace(-1, 1, num=5)
 yticks = np.linspace(-1, 1, num=5)
