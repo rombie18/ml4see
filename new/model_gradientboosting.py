@@ -7,8 +7,6 @@ from sklearn.model_selection import train_test_split
 
 from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
 
-N_COMPONENTS = 10
-
 # Initialise argument parser
 parser = argparse.ArgumentParser()
 parser.add_argument("run_number", type=int)

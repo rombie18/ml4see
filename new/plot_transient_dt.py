@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import h5py
 import matplotlib.pyplot as plt
+from scipy.signal import find_peaks
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
@@ -24,7 +25,7 @@ tran_number = args.tran_number
 h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
 with h5py.File(h5_path, "r") as h5file:
     tran_name = f"tran_{tran_number:06d}"
-    
+
     # Check if file is up to required processing stage
     require_processing_stage(h5file, 2, strict=True)
 
@@ -42,7 +43,7 @@ with h5py.File(h5_path, "r") as h5file:
     # Subtract mean baseline frequency from each sample to get delta frequency
     baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs["baseline_freq_mean_hz"]
     tran_data = np.subtract(tran_data, baseline_freq)
-    
+
     # Apply moving average filter
     WINDOW_SIZE = 1000
     window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
@@ -54,19 +55,38 @@ with h5py.File(h5_path, "r") as h5file:
     # Downsample time and frequency data
     time_data = time_data[::DOWNSAMPLE_FACTOR]
     tran_data = tran_data[::DOWNSAMPLE_FACTOR]
-    
+
     # Calculate derivative
     time_data_dt = time_data[1:]
     tran_data_dt = np.diff(tran_data)
-    
+
     fig, ax = plt.subplots(2, 1)
     ax[0].plot(time_data, tran_data)
     ax[0].set_xlabel("Time (s)")
     ax[0].set_ylabel("Delta frequency (Hz)")
-    
+
     ax[1].plot(time_data_dt, tran_data_dt)
     ax[1].set_xlabel("Time (s)")
-    ax[1].set_ylabel("Delta frequency (Hz)")
+    ax[1].set_ylabel("Delta frequency change speed (Hz/s)")
+
+    # Calculate features
+    f_max = np.max(tran_data_dt)
+
+    peaks, _ = find_peaks(tran_data_dt, height=1000)
+    ax[1].plot(time_data_dt[peaks], tran_data_dt[peaks], "x")
+
+    f_avg_peak_dis = np.mean(np.diff(time_data_dt[peaks]))
+    if np.isnan(f_avg_peak_dis):
+        f_avg_peak_dis = 0
+
+    # TODO find better way to select zero index
+    zero_timestamp = np.where(np.isclose(time_data_dt, 0, atol=1e-5))[0][0]
+    f_zero_max_dis = time_data_dt[zero_timestamp] - time_data_dt[np.argmin(tran_data_dt)]
+    
+    print(f"max: {f_max} Hz/s")
+    print(f"num_peaks: {len(peaks)}")
+    print(f"avg_inter_peak_dis: {f_avg_peak_dis} s")
+    print(f"zero_max_dis: {f_zero_max_dis} s")
 
     ax[0].set_title(f"Transient {tran_name} - Derivative")
     plt.savefig(f"plots/run_dt_{run_number:03d}_{tran_name}.png", bbox_inches="tight")

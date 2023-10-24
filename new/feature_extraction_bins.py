@@ -42,10 +42,11 @@ import h5py
 import argparse
 import numpy as np
 import pandas as pd
+
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
-from scipy.signal import find_peaks
+
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
@@ -98,42 +99,49 @@ def process_transient(df):
     feature_df = feature_df.rename_axis("transient").reset_index(drop=False)
     feature_df.transient = feature_df.transient.astype("category")
     feature_df.set_index("transient")
-    feature_df["transient"] = [df["transient"].iloc[0]]
 
-    # Calculate derivative
-    time_data = df["time"].to_numpy()
-    tran_data = df["frequency"].to_numpy()
-    time_data_dt = time_data[1:]
-    tran_data_dt = np.diff(tran_data)
+    feature_df["transient"] = [df['transient'].iloc[0]]
 
-    # If 'probe' data, just return column names with fake data
-    if len(tran_data) > 1:
-        # Calculate features
-        peaks, _ = find_peaks(tran_data_dt, height=1000)
-        num_peaks = len(peaks)
-        max = np.max(tran_data_dt)
-        if num_peaks > 1:
-            avg_peak_dis = np.mean(np.diff(time_data_dt[peaks]))
-        else:
-            avg_peak_dis = 0
-
-        # TODO find better way to select zero index
-        zero_timestamp = np.where(np.isclose(time_data_dt, 0, atol=1e-5))[0][0]
-        zero_min_dis = (
-            time_data_dt[zero_timestamp] - time_data_dt[np.argmin(tran_data_dt)]
-        )
-
-        feature_df["max"] = [max]
-        feature_df["num_peaks"] = [num_peaks]
-        feature_df["avg_peak_dis"] = [avg_peak_dis]
-        feature_df["zero_min_dis"] = [zero_min_dis]
+    if (len(df["time"].to_numpy()) > 1):
+        bin_maxs, last_timestamps = max_values_in_bins(df["time"].to_numpy(), df["frequency"].to_numpy(), 100)
+        for param_name, param_value in enumerate(bin_maxs):
+            feature_df["max_bin_" + str(param_name)] = [param_value]
     else:
-        feature_df["max"] = [0]
-        feature_df["num_peaks"] = [0]
-        feature_df["avg_peak_dis"] = [0]
-        feature_df["zero_min_dis"] = [0]
+        bin_maxs = np.repeat(1, 100)
+        for param_name, param_value in enumerate(bin_maxs):
+            feature_df["max_bin_" + str(param_name)] = [param_value]
 
     return feature_df
+
+
+def max_values_in_bins(timestamps, values, num_bins):
+    # Calculate the bin size
+    bin_size = (timestamps[-1] - timestamps[0]) / num_bins
+
+    # Calculate the bin edges
+    bin_edges = [timestamps[0] + i * bin_size for i in range(num_bins + 1)]
+
+    # Compute the histogram
+    bin_indices = np.digitize(timestamps, bin_edges)
+
+    # Initialize variables to store sums and last timestamps
+    bin_maxs = []
+    last_timestamps = []
+
+    # Iterate through the bins
+    for bin_num in range(1, num_bins + 1):
+        mask = bin_indices == bin_num
+        bin_max = np.max(values[mask])
+        last_timestamp = timestamps[mask][-1] if np.any(mask) else None
+        bin_maxs.append(bin_max)
+        last_timestamps.append(last_timestamp)
+
+    # Normalize the bin sums to the range [0, 1]
+    # max_sum = np.max(bin_maxs)
+    # min_sum = np.min(bin_maxs)
+    # normalized_bin_maxs = [(x - min_sum) / (max_sum - min_sum) for x in bin_maxs]
+
+    return bin_maxs, last_timestamps
 
 
 def main():
