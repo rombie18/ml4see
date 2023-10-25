@@ -1,4 +1,5 @@
 import os
+import numpy as np
 import pandas as pd
 import matplotlib.axes
 import matplotlib.pyplot as plt
@@ -81,3 +82,22 @@ def require_processing_stage(h5file, stage_req, strict=False):
             raise ValueError(
                 f"HDF file is not at required level of processing. Found: {file_stage}; Required: =={stage_req}."
             )
+
+
+def moving_average(tran_data, time_data, downsample_factor, window_size):
+    # Apply moving average filter
+    window = np.ones(window_size) / window_size
+    tran_data = np.convolve(tran_data, window, mode="valid")
+
+    # Adjust time data to match length of convoluted output
+    time_data = time_data[(len(window) - 1) :]
+
+    # Downsample time and frequency data
+    time_data = time_data[::downsample_factor]
+    tran_data = tran_data[::downsample_factor]
+
+    return tran_data, time_data
+
+
+def exponential_decay(t, N, λ, c):
+    return (N - c) * np.exp(-λ * t) + c

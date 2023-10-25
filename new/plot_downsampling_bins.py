@@ -22,9 +22,38 @@ def moving_average(tran_data, time_data, downsample_factor, window_size):
 
     return tran_data, time_data
 
+def max_values_in_bins(timestamps, values, num_bins):
+    # Calculate the bin size based on num_bins symetric around zero point
+    #TODO find better way to select zero index
+    zero_timestamp = np.where(np.isclose(timestamps, 0, atol=1e-5))[0][0]
+    bin_size = 2 * (timestamps[zero_timestamp] - timestamps[0]) / num_bins
 
+    # Calculate the bin edges
+    bin_edges = [timestamps[0] + i * bin_size for i in range(num_bins + 1)]
+
+    # Compute the histogram
+    bin_indices = np.digitize(timestamps, bin_edges)
+
+    # Initialize variables to store sums and last timestamps
+    bin_maxs = []
+    last_timestamps = []
+
+    # Iterate through the bins
+    for bin_num in range(1, num_bins + 1):
+        mask = bin_indices == bin_num
+        bin_max = np.max(values[mask])
+        last_timestamp = timestamps[mask][-1] if np.any(mask) else None
+        bin_maxs.append(bin_max)
+        last_timestamps.append(last_timestamp)
+
+    return bin_maxs, last_timestamps
+        
 def exponential_decay(t, N, λ, c):
-    return (N - c) * np.exp(-λ * t) + c
+    return N * np.exp(-λ * t) + c
+
+
+def double_exponential_decay(t, Nf, Ns, λf, λs, c):
+    return Nf * np.exp(-λf * t) + Ns * np.exp(-λs * t) + c
 
 
 # Initialise argument parser
@@ -56,9 +85,6 @@ with h5py.File(h5_path, "r") as h5file:
 
     # Subtract mean baseline frequency from each sample to get delta frequency
     baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs["baseline_freq_mean_hz"]
-    baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
-        "baseline_freq_mean_hz"
-    ]
     tran_data = np.subtract(tran_data, baseline_freq)
 
     # Downsample data
@@ -67,45 +93,41 @@ with h5py.File(h5_path, "r") as h5file:
     )
 
     # Try to fit exponential decay
-
-    # TODO find better way to select zero index
-    zero_timestamp = np.where(np.isclose(time_data_processed, 0, atol=1e-5))[0][0]
-    time_data_processed_exp = time_data_processed[zero_timestamp:]
-    tran_data_processed_exp = tran_data_processed[zero_timestamp:]
-
-    print(f"std: {np.std(tran_data_processed[:zero_timestamp])}")
-
+    max_index = np.argmax(tran_data_processed)
+    time_data_processed_exp = time_data_processed[max_index:]
+    tran_data_processed_exp = tran_data_processed[max_index:]
     try:
-        # params: N, λ, c
-        # model: (N - c) * np.exp(-λ * t) + c
         params, _ = curve_fit(
             exponential_decay,
             time_data_processed_exp,
             tran_data_processed_exp,
-            p0=(
-                np.max(tran_data_processed_exp),
-                10000,
-                np.mean(tran_data_processed[:zero_timestamp]),
-            ),
-            bounds=(
-                [
-                    np.max(tran_data_processed[:zero_timestamp])
-                    + np.abs(np.max(tran_data_processed[:zero_timestamp])),
-                    0,
-                    -1e5,
-                ],
-                [1e6, 1e6, 1e5],
-            ),
+            p0=(35000, 10000, 100000),
+            bounds=([5000, 1000, 0], [1e6, 1e4, 1e6]),
         )
-        print(params)
+        # print(params)
     except:
-        print("Exponential fit failed")
+        print("Exponential single fit failed")
+
+    try:
+        params_double, _ = curve_fit(
+            double_exponential_decay,
+            time_data_processed_exp,
+            tran_data_processed_exp,
+            p0=(35000, 35000, 10000, 100, 100000),
+            bounds=([5000, 5000, 1000, 0, 0], [1e6, 1e6, 1e4, 1e4, 1e6]),
+        )
+        # print(params_double)
+    except:
+        print("Exponential double fit failed")
 
     # Plot results
     figure, axis = plt.subplots(1, 1)
 
     axis.plot(time_data, tran_data, ".")
     axis.plot(time_data_processed, tran_data_processed, ".-")
+
+    bin_maxs, last_timestamps = max_values_in_bins(time_data_processed, tran_data_processed, 8)
+    axis.step(last_timestamps, bin_maxs, "r-", linewidth=3)
 
     try:
         axis.plot(
@@ -114,16 +136,21 @@ with h5py.File(h5_path, "r") as h5file:
             "c-",
             linewidth=3,
         )
+        axis.plot(
+            time_data_processed_exp,
+            double_exponential_decay(time_data_processed_exp, *params_double),
+            "m-",
+            linewidth=3,
+        )
     except:
         pass
-
     axis.set_title(f"Moving Average ({tran_name})")
 
     min = np.min(tran_data_processed)
     min = min / 1.05
     max = np.max(tran_data_processed)
     max = max * 1.05
-    axis.set_ylim(min, max)
+    # axis.set_ylim(min, max)
 
     axis.set_xlabel("Time (s)")
     axis.set_ylabel("Delta frequency (Hz)")

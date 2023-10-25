@@ -42,180 +42,114 @@ import h5py
 import argparse
 import numpy as np
 import pandas as pd
-from scipy.optimize import curve_fit
-
 import dask
 import dask.dataframe as dd
 from dask.distributed import Client, LocalCluster
-
-from tsfresh.feature_extraction import extract_features
+from scipy.optimize import curve_fit
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
     DATA_FEATURES_DIRECTORY,
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
+    PRETRIG_GUARD_SAMPLES,
 )
-from utils import require_processing_stage
+from utils import require_processing_stage, moving_average, exponential_decay
 
-FC_PARAMETERS = {
-    "mean": None,
-    "maximum": None,
-    "minimum": None,
-    "standard_deviation": None,
-    "variance": None,
-    "root_mean_square": None,
-    "abs_energy": None,
-    "skewness": None,
-    "kurtosis": None,
-    "sum_values": None,
-    "quantile": [{"q": 0.05}, {"q": 0.25}, {"q": 0.75}, {"q": 0.95}],
-    "cid_ce": [{"normalize": True}, {"normalize": False}],
-    "quantile": [{"q": q} for q in [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]],
-    "number_cwt_peaks": [{"n": n} for n in [1, 5]],
-    "number_peaks": [{"n": n} for n in [1, 3, 5, 10, 50]],
-    "index_mass_quantile": [{"q": q} for q in [0.1, 0.2, 0.3, 0.4, 0.6, 0.7, 0.8, 0.9]],
-    "ratio_beyond_r_sigma": [{"r": x} for x in [0.5, 1, 1.5, 2, 2.5, 3, 5, 6, 7, 10]],
-    "lempel_ziv_complexity": [{"bins": x} for x in [2, 3, 5, 10, 100]],
-    "permutation_entropy": [{"tau": 1, "dimension": x} for x in [3, 4, 5, 6, 7]],
-    "mean_n_absolute_max": [
-        {
-            "number_of_maxima": 3,
-            "number_of_maxima": 5,
-            "number_of_maxima": 7,
-        }
-    ],
-}
 
 # TODO add beam position info to transient
 
 
-def load_transient(h5_path, tran_name, time_data):
+def process_transient(h5_path, tran_name):
     # TODO try to find way to speed up reading transients from disk
+
     with h5py.File(h5_path, "r") as h5file:
-        # Get transient samples
-        tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
+        # Get transient data from file
+        transient = h5file["sdr_data"]["all"][tran_name]
+
+        # Get additional meta data
+        fs = h5file["sdr_data"].attrs["sdr_info_fs"]
+        len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
+        len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
+        dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
+        event_len = len_pretrig + len_posttrig - dsp_ntaps
 
         # Subtract mean baseline frequency from each sample to get delta frequency
         baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
             "baseline_freq_mean_hz"
         ]
-        tran_data = np.subtract(tran_data, baseline_freq)
+        baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
+            "baseline_freq_mean_hz"
+        ]
 
-        # Apply moving average filter
-        window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
-        tran_data = np.convolve(tran_data, window, mode="valid")
+        # Construct time and frequency arrays
+        tran_time = (
+            np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
+        )
+        tran_freq = np.subtract(np.array(transient), baseline_freq)
 
-        # Adjust time data to match length of convoluted output
-        time_data = time_data[WINDOW_SIZE - 1 :]
+        # Construct pre-trigger baseline arrays
+        tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
+        tran_pretrig_freq = tran_freq[: len_pretrig - PRETRIG_GUARD_SAMPLES]
 
-        # Downsample time and frequency data
-        time_data = time_data[::DOWNSAMPLE_FACTOR]
-        tran_data = tran_data[::DOWNSAMPLE_FACTOR]
+        # Construct post-trigger arrays
+        tran_posttrig_time = tran_time[len_pretrig:]
+        tran_posttrig_freq = tran_freq[len_pretrig:]
+
+        # Downsample data
+        tran_pretrig_freq_ds, tran_pretrig_time_ds = moving_average(
+            tran_pretrig_freq, tran_pretrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+        )
+        tran_posttrig_freq_ds, tran_posttrig_time_ds = moving_average(
+            tran_posttrig_freq, tran_posttrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+        )
+
+        # Calculate features
+        features = {}
+        features["transient"] = tran_name
+        features["std"] = np.std(tran_pretrig_freq_ds)
+
+        # Try to fit exponential decay
+        initial_guess = (
+            np.max(tran_posttrig_freq_ds),
+            1000,
+            np.mean(tran_pretrig_freq_ds),
+        )
+
+        minimum_exp_height = np.mean(tran_pretrig_freq_ds) + 2 * (
+            np.abs(np.max(tran_pretrig_freq_ds)) + np.abs(np.min(tran_pretrig_freq_ds))
+        )
+        boundaries = (
+            [
+                minimum_exp_height,
+                0,
+                -1e6,
+            ],
+            [1e6, 1e6, 1e6],
+        )
+
+        try:
+            # params: N, λ, c
+            # model: (N - c) * np.exp(-λ * t) + c
+            params, _ = curve_fit(
+                exponential_decay,
+                tran_posttrig_time_ds,
+                tran_posttrig_freq_ds,
+                p0=initial_guess,
+                bounds=boundaries,
+            )
+            features["exp_fit_N"] = params[0]
+            features["exp_fit_λ"] = params[1]
+            features["exp_fit_c"] = params[2]
+        except:
+            features["exp_fit_N"] = 0
+            features["exp_fit_λ"] = 0
+            features["exp_fit_c"] = 0
 
         # Convert transient data to Pandas dataframe
-        df = pd.DataFrame.from_dict(
-            {"transient": tran_name, "time": time_data, "frequency": tran_data}
-        )
+        df = pd.DataFrame(features, index=[0])
+        
         return df
-
-
-def process_transient(df):
-    # Remove NaN 'probe' data since it is causing issues with feature extraction
-    df = df[df["transient"].notna()]
-
-    # Extract features of single transient
-    feature_df = extract_features(
-        df,
-        column_id="transient",
-        column_sort="time",
-        n_jobs=0,
-        default_fc_parameters=FC_PARAMETERS,
-        disable_progressbar=True,
-        show_warnings=False,
-    )
-
-    # Set tranient column as index
-    feature_df = feature_df.rename_axis("transient").reset_index(drop=False)
-    feature_df.transient = feature_df.transient.astype("category")
-    feature_df.set_index("transient")
-
-    # Extract single exponential decay parameters and add to dataframe
-    params = fit_single_exponential_decay(df["frequency"], df["time"])
-    for param_name, param_value in params.items():
-        feature_df[param_name] = [param_value]
-
-    # Extract double exponential decay parameters and add to dataframe
-    params = fit_double_exponential_decay(df["frequency"], df["time"])
-    for param_name, param_value in params.items():
-        feature_df[param_name] = [param_value]
-
-    return feature_df
-
-
-def fit_double_exponential_decay(freq_data, time_data):
-    def double_exponential_decay(t, Nf, Ns, λf, λs, c):
-        return Nf * np.exp(-λf * t) + Ns * np.exp(-λs * t) + c
-
-    start_index = np.argmax(freq_data)
-    time_data = time_data[start_index:]
-    freq_data = freq_data[start_index:]
-
-    try:
-        # TODO limit boundries to fast and slow
-        params, _ = curve_fit(
-            double_exponential_decay,
-            time_data,
-            freq_data,
-            p0=(35000, 35000, 10000, 100, 20000),
-            bounds=([0, 0, 1000, 0, 0], [1e8, 1e8, 1e5, 1e4, 1e6]),
-        )
-        return {
-            "fit_double_exponential_decay__Nf": params[0],
-            "fit_double_exponential_decay__Ns": params[1],
-            "fit_double_exponential_decay__λf": params[2],
-            "fit_double_exponential_decay__λs": params[3],
-            "fit_double_exponential_decay__c": params[4],
-        }
-    except:
-        logging.warning(f"Curve fit double exponential decay failed")
-        return {
-            "fit_double_exponential_decay__Nf": 0,
-            "fit_double_exponential_decay__Ns": 0,
-            "fit_double_exponential_decay__λf": 0,
-            "fit_double_exponential_decay__λs": 0,
-            "fit_double_exponential_decay__c": 0,
-        }
-
-
-def fit_single_exponential_decay(freq_data, time_data):
-    def single_exponential_decay(t, N, λ, c):
-        return N * np.exp(-λ * t) + c
-
-    start_index = np.argmax(freq_data)
-    time_data = time_data[start_index:]
-    freq_data = freq_data[start_index:]
-
-    try:
-        params, _ = curve_fit(
-            single_exponential_decay,
-            time_data,
-            freq_data,
-            p0=(35000, 5000, 20000),
-            bounds=([0, 0, 0], [1e8, 1e5, 1e6]),
-        )
-        return {
-            "fit_single_exponential_decay__N": params[0],
-            "fit_single_exponential_decay__λ": params[1],
-            "fit_single_exponential_decay__c": params[2],
-        }
-    except:
-        logging.warning(f"Curve fit double exponential decay failed")
-        return {
-            "fit_single_exponential_decay__N": 0,
-            "fit_single_exponential_decay__λ": 0,
-            "fit_single_exponential_decay__c": 0,
-        }
 
 
 def main():
@@ -275,38 +209,18 @@ def main():
             # Check if file is up to required processing stage
             require_processing_stage(h5file, 2, strict=True)
 
-            # Get run number and transients from file
-            run_num = h5file["meta"].attrs["run_id"]
+            # Get transients from h5 file
             transients = h5file["sdr_data"]["all"]
-
-            # Get additional meta data
-            fs = h5file["sdr_data"].attrs["sdr_info_fs"]
-            len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
-            len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
-            dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
-
-            # Calculate real time from meta data
-            event_len = len_pretrig + len_posttrig - dsp_ntaps
-            time_data = (
-                np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-            )
-
-            # TODO write comment
-            time_data_future = client.scatter(time_data)
 
             # Set up tasks to convert transients to Pandas dataframes
             transient_tasks = []
             for tran_name in transients.keys():
                 transient_tasks.append(
-                    dask.delayed(load_transient)(h5_path, tran_name, time_data_future)
+                    dask.delayed(process_transient)(h5_path, tran_name)
                 )
-            # transient_tasks.append(dask.delayed(load_transient)(h5_path, "tran_000000", time_data_future))
 
             # Set up task to merge all transients into single Dask dataframe
-            transients_task = dd.from_delayed(transient_tasks)
-
-            # Set up task to extract features from each transient and merge then into one fDask dataframe
-            features_task = transients_task.map_partitions(process_transient)
+            features_task = dd.from_delayed(transient_tasks)
 
             # Execute above tasks
             features: pd.DataFrame = features_task.compute()

@@ -6,7 +6,7 @@ import numpy as np
 import h5py
 import os
 
-from config import DATA_STRUCTURED_DIRECTORY
+from config import DATA_STRUCTURED_DIRECTORY, PRETRIG_GUARD_SAMPLES
 from utils import require_processing_stage
 
 META_PROCESSING_STAGE = 2  # processing stage after completing this stage
@@ -16,8 +16,6 @@ META_STAGE_2_VERSION = "3.0"  # version string for this stage (stage 2)
 # v1.0: baseline heuristics annotation (mean, std, std-of-mean, std-of-std) and outlier scoring
 # v2.0: fix baseline stats misattribution, compatibility with stage 1 v2.0
 # v3.0: removed outlier score calculation from added stats
-
-PRETRIG_GUARD_SAMPLES = 100
 
 """Various utility methods"""
 def chunker(seq, size):
