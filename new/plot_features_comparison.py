@@ -5,21 +5,19 @@ import matplotlib.pyplot as plt
 from config import DATA_FEATURES_DIRECTORY
 from utils import generatePlotTitle
 
-RUN_NUMBER = 29
-MARK_TRANSIENTS = ["tran_000026", "tran_000054"]
-FEATURE_1 = 'fit_double_exponential_decay__Nf'
-FEATURE_2 = 'fit_double_exponential_decay__λf'
+RUN_NUMBER = 18
+MARK_TRANSIENTS = []
+FEATURE_1 = 'std'
+FEATURE_2 = 'exp_fit_N'
 
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
 df = pd.read_csv(csv_path)
 
-# df = df.loc[df['transient'].isin(["tran_000026", "tran_000054"])]
-
 ax = df.plot.scatter(x=FEATURE_1, y=FEATURE_2)
 
-# for i, txt in enumerate(df["transient"]):
-#     if len(MARK_TRANSIENTS) == 0 or txt in ["tran_000026", "tran_000054"]:
-#         ax.annotate(txt, (df[FEATURE_1][i], df[FEATURE_2][i]))
+for i, txt in enumerate(df["transient"]):
+    if len(MARK_TRANSIENTS) == 0 or txt in MARK_TRANSIENTS:
+        ax.annotate(txt, (df[FEATURE_1][i], df[FEATURE_2][i]))
 
 generatePlotTitle(ax, "Feature Comparsion Plot", RUN_NUMBER)
 plt.savefig(f"plots/run_{RUN_NUMBER:03d}_{FEATURE_1}___{FEATURE_2}.png", bbox_inches="tight")

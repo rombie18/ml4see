@@ -17,6 +17,7 @@ parser.add_argument("run_number", type=int)
 args = parser.parse_args()
 run_number = args.run_number
 
+#TODO generalise this block -> move to utils
 df_features = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
 df_labeled = pd.read_csv(os.path.join(DATA_LABELED_DIRECTORY, f"run_{run_number:03d}.csv"))
 df = pd.merge(df_features, df_labeled, on='transient')

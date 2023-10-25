@@ -101,7 +101,11 @@ with h5py.File(h5_path, "r") as h5file:
         elif prompt == "UNDO":
             labels.pop()
         else:
-            labels.append({"transient": tran_name, "type": prompt})
+            if prompt == 0:
+                valid = 1
+            else:
+                valid = 0
+            labels.append({"transient": tran_name, "type": prompt, "valid": valid})
 
         plt.close()
 

@@ -61,8 +61,8 @@ from utils import require_processing_stage, moving_average, exponential_decay
 
 
 def process_transient(h5_path, tran_name):
+    
     # TODO try to find way to speed up reading transients from disk
-
     with h5py.File(h5_path, "r") as h5file:
         # Get transient data from file
         transient = h5file["sdr_data"]["all"][tran_name]
@@ -107,7 +107,7 @@ def process_transient(h5_path, tran_name):
         # Calculate features
         features = {}
         features["transient"] = tran_name
-        features["std"] = np.std(tran_pretrig_freq_ds)
+        features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
 
         # Try to fit exponential decay
         initial_guess = (
@@ -138,13 +138,13 @@ def process_transient(h5_path, tran_name):
                 p0=initial_guess,
                 bounds=boundaries,
             )
-            features["exp_fit_N"] = params[0]
-            features["exp_fit_λ"] = params[1]
-            features["exp_fit_c"] = params[2]
+            features["posttrig_exp_fit_N"] = params[0]
+            features["posttrig_exp_fit_λ"] = params[1]
+            features["posttrig_exp_fit_c"] = params[2]
         except:
-            features["exp_fit_N"] = 0
-            features["exp_fit_λ"] = 0
-            features["exp_fit_c"] = 0
+            features["posttrig_exp_fit_N"] = 0
+            features["posttrig_exp_fit_λ"] = 0
+            features["posttrig_exp_fit_c"] = 0
 
         # Convert transient data to Pandas dataframe
         df = pd.DataFrame(features, index=[0])

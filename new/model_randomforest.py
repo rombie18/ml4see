@@ -27,7 +27,7 @@ X = df_cleaned
 y = df['valid']
 
 # Split data into training and test sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
 
 # Train classifier
 clf = RandomForestClassifier(n_estimators=100)

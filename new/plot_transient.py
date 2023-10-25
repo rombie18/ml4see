@@ -1,15 +1,17 @@
 import os
+import matplotlib.pyplot as plt
+import h5py
 import numpy as np
 import argparse
-import h5py
-import matplotlib.pyplot as plt
+from scipy.optimize import curve_fit
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
+    PRETRIG_GUARD_SAMPLES,
 )
-from utils import generatePlotTitle, require_processing_stage
+from utils import moving_average, exponential_decay
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
@@ -19,55 +21,140 @@ args = parser.parse_args()
 run_number = args.run_number
 tran_number = args.tran_number
 
-# TODO cleanup code
-
 h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
 with h5py.File(h5_path, "r") as h5file:
+    run_name = f"run_{run_number:03d}"
     tran_name = f"tran_{tran_number:06d}"
-    
-    # Check if file is up to required processing stage
-    require_processing_stage(h5file, 2, strict=True)
+
+    # Get transient data from file
+    transient = h5file["sdr_data"]["all"][tran_name]
 
     # Get additional meta data
     fs = h5file["sdr_data"].attrs["sdr_info_fs"]
     len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
     len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
     dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
-
-    # Calculate real time from meta data
     event_len = len_pretrig + len_posttrig - dsp_ntaps
-    time_data = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-
-    tran_data = np.array(h5file["sdr_data"]["all"][tran_name])
 
     # Subtract mean baseline frequency from each sample to get delta frequency
-    baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs["baseline_freq_mean_hz"]
-    tran_data = np.subtract(tran_data, baseline_freq)
+    baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
+        "baseline_freq_mean_hz"
+    ]
+    baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
+        "baseline_freq_mean_hz"
+    ]
 
-    # Apply moving average filter
-    window = np.ones(WINDOW_SIZE) / WINDOW_SIZE
-    tran_data_ds = np.convolve(tran_data, window, mode="valid")
-
-    # Adjust time data to match length of convoluted output
-    time_data_ds = time_data[WINDOW_SIZE - 1 :]
-
-    # Downsample time and frequency data
-    time_data_ds = time_data_ds[::DOWNSAMPLE_FACTOR]
-    tran_data_ds = tran_data_ds[::DOWNSAMPLE_FACTOR]
-
-    # Plot result
-    fig, ax = plt.subplots()
-    ax.plot(time_data, tran_data, ".", label="Original raw data")
-    ax.axvline(x=0, color="lime")
-    ax.plot(
-        time_data_ds,
-        tran_data_ds,
-        "-",
-        label="Filtered and downsampled",
-        linewidth=2,
+    # Construct time and frequency arrays
+    tran_time = (
+        np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
     )
-    ax.set_xlabel("Time (s)")
-    ax.set_ylabel("Delta frequency (Hz)")
+    tran_freq = np.subtract(np.array(transient), baseline_freq)
+
+    # Construct pre-trigger baseline arrays
+    tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
+    tran_pretrig_freq = tran_freq[: len_pretrig - PRETRIG_GUARD_SAMPLES]
+
+    # Construct post-trigger arrays
+    tran_posttrig_time = tran_time[len_pretrig:]
+    tran_posttrig_freq = tran_freq[len_pretrig:]
+
+    # Downsample data
+    tran_freq_ds, tran_time_ds = moving_average(
+        tran_freq, tran_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+    )
+    tran_pretrig_freq_ds, tran_pretrig_time_ds = moving_average(
+        tran_pretrig_freq, tran_pretrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+    )
+    tran_posttrig_freq_ds, tran_posttrig_time_ds = moving_average(
+        tran_posttrig_freq, tran_posttrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+    )
+
+    # Calculate features
+    features = {}
+    features["transient"] = tran_name
+    features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
+    features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
+
+    # Try to fit exponential decay
+    initial_guess = (
+        np.max(tran_posttrig_freq_ds),
+        1000,
+        np.mean(tran_pretrig_freq_ds),
+    )
+
+    minimum_exp_height = np.mean(tran_pretrig_freq_ds) + 2 * (
+        np.abs(np.max(tran_pretrig_freq_ds)) + np.abs(np.min(tran_pretrig_freq_ds))
+    )
+    boundaries = (
+        [
+            minimum_exp_height,
+            0,
+            -1e6,
+        ],
+        [1e6, 1e6, 1e6],
+    )
+
+    try:
+        # params: N, λ, c
+        # model: (N - c) * np.exp(-λ * t) + c
+        params, _ = curve_fit(
+            exponential_decay,
+            tran_posttrig_time_ds,
+            tran_posttrig_freq_ds,
+            p0=initial_guess,
+            bounds=boundaries,
+        )
+        features["posttrig_exp_fit_N"] = params[0]
+        features["posttrig_exp_fit_λ"] = params[1]
+        features["posttrig_exp_fit_c"] = params[2]
+    except:
+        features["posttrig_exp_fit_N"] = 0
+        features["posttrig_exp_fit_λ"] = 0
+        features["posttrig_exp_fit_c"] = 0
+        
+    print(features)
+
+    # Plot results
+    figure, axis = plt.subplots(1, 1)
+
+    axis.plot(tran_time, tran_freq, ".")
+    axis.plot(tran_time_ds, tran_freq_ds, ".-")
+
+    axis.axhline(
+        y=minimum_exp_height,
+        color="r",
+        linestyle="--",
+    )
     
-    generatePlotTitle(ax, f"Transient {tran_name} - downsampled", run_number)
-    plt.savefig(f"plots/run_{run_number:03d}_{tran_name}.png", bbox_inches="tight")
+    axis.axvline(
+        x=tran_pretrig_time[-1],
+        color="lime",
+        linestyle="--",
+    )
+
+    try:
+        axis.plot(
+            tran_posttrig_time_ds,
+            exponential_decay(tran_posttrig_time_ds, *params),
+            "c-",
+            linewidth=3,
+        )
+    except:
+        pass
+
+    axis.set_title(f"Moving Average ({tran_name})")
+
+    max = np.max(tran_freq_ds)
+    max = max * 1.1
+    axis.set_ylim(-5e3, max)
+
+    axis.set_xlabel("Time (s)")
+    axis.set_ylabel("Delta frequency (Hz)")
+
+    # Visualize window size
+    # for point in time_data[::window_size]:
+    #     axis.axvline(x = point, color = 'gray', label = 'axvline - full height', zorder=-1)
+
+    # Set figure size and save
+    figure.set_size_inches(13.5, 7.5)
+    plt.savefig(f"plots/tran_{run_name}_{tran_name}.png")
