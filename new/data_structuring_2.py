@@ -1,6 +1,7 @@
 """Processing stage 2: annotate baseline data"""
 
 import argparse
+import logging
 import math
 import numpy as np
 import h5py
@@ -18,6 +19,8 @@ META_STAGE_2_VERSION = "3.0"  # version string for this stage (stage 2)
 # v3.0: removed outlier score calculation from added stats
 
 """Various utility methods"""
+
+
 def chunker(seq, size):
     """Helper method for iterating over chunks of a list"""
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
@@ -42,7 +45,20 @@ def main():
 
         h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
         with h5py.File(h5_path, "a") as h5file:
-            require_processing_stage(h5file, 1, strict=True)
+            if "sdr_data" not in h5file:
+                logging.warning(
+                    f"Skipping run_{run_number:03d} since it has no transients (sdr_data)."
+                )
+                continue
+
+            try:
+                require_processing_stage(h5file, 1, strict=True)
+            except:
+                logging.warning(
+                    f"Skipping run_{run_number:03d} since it has an incorrect processing stage."
+                )
+                continue
+
             meta_ds = h5file["meta"]
             meta_ds.attrs.modify("processing_stage", META_PROCESSING_STAGE)
             meta_ds.attrs.create("processing_stage_2_version", META_STAGE_2_VERSION)

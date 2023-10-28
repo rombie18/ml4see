@@ -7,8 +7,8 @@ from utils import generatePlotTitle
 
 RUN_NUMBER = 18
 MARK_TRANSIENTS = []
-FEATURE_1 = 'std'
-FEATURE_2 = 'exp_fit_N'
+FEATURE_1 = 'pretrig_std'
+FEATURE_2 = 'posttrig_exp_fit_R2'
 
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
 df = pd.read_csv(csv_path)

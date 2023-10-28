@@ -7,7 +7,7 @@ from config import DATA_FEATURES_DIRECTORY
 from utils import generatePlotTitle
 
 RUN_NUMBER = 18
-FEATURE = 'frequency__index_mass_quantile__q_0.1'
+FEATURE = 'posttrig_exp_fit_N'
 
 csv_path = os.path.join(DATA_FEATURES_DIRECTORY, f"run_{RUN_NUMBER:03d}.csv")
 df = pd.read_csv(csv_path)

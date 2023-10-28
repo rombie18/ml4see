@@ -37,17 +37,13 @@ with h5py.File(h5_path, "r") as h5file:
     event_len = len_pretrig + len_posttrig - dsp_ntaps
 
     # Subtract mean baseline frequency from each sample to get delta frequency
-    baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
-        "baseline_freq_mean_hz"
-    ]
+    baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs["baseline_freq_mean_hz"]
     baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
         "baseline_freq_mean_hz"
     ]
 
     # Construct time and frequency arrays
-    tran_time = (
-        np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-    )
+    tran_time = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
     tran_freq = np.subtract(np.array(transient), baseline_freq)
 
     # Construct pre-trigger baseline arrays
@@ -104,14 +100,28 @@ with h5py.File(h5_path, "r") as h5file:
             p0=initial_guess,
             bounds=boundaries,
         )
+
+        # Caluculate coefficient of determination (R²)
+        residuals = tran_posttrig_freq_ds - exponential_decay(
+            tran_posttrig_time_ds, *params
+        )
+        ss_res = np.sum(residuals**2)
+        ss_tot = np.sum((tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2)
+        r_squared = 1 - (ss_res / ss_tot)
+
+        # Assign fitted parameters and R² to resulting feature set
         features["posttrig_exp_fit_N"] = params[0]
         features["posttrig_exp_fit_λ"] = params[1]
         features["posttrig_exp_fit_c"] = params[2]
+        features["posttrig_exp_fit_R2"] = r_squared
+
     except:
+        # If exponential fit fails, assign parameters to zero
         features["posttrig_exp_fit_N"] = 0
         features["posttrig_exp_fit_λ"] = 0
         features["posttrig_exp_fit_c"] = 0
-        
+        features["posttrig_exp_fit_R2"] = 0
+
     print(features)
 
     # Plot results
@@ -125,7 +135,7 @@ with h5py.File(h5_path, "r") as h5file:
         color="r",
         linestyle="--",
     )
-    
+
     axis.axvline(
         x=tran_pretrig_time[-1],
         color="lime",

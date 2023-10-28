@@ -61,7 +61,6 @@ from utils import require_processing_stage, moving_average, exponential_decay
 
 
 def process_transient(h5_path, tran_name):
-    
     # TODO try to find way to speed up reading transients from disk
     with h5py.File(h5_path, "r") as h5file:
         # Get transient data from file
@@ -138,17 +137,33 @@ def process_transient(h5_path, tran_name):
                 p0=initial_guess,
                 bounds=boundaries,
             )
+
+            # Caluculate coefficient of determination (R²)
+            residuals = tran_posttrig_freq_ds - exponential_decay(
+                tran_posttrig_time_ds, *params
+            )
+            ss_res = np.sum(residuals**2)
+            ss_tot = np.sum(
+                (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
+            )
+            r_squared = 1 - (ss_res / ss_tot)
+
+            # Assign fitted parameters and R² to resulting feature set
             features["posttrig_exp_fit_N"] = params[0]
             features["posttrig_exp_fit_λ"] = params[1]
             features["posttrig_exp_fit_c"] = params[2]
+            features["posttrig_exp_fit_R2"] = r_squared
+
         except:
+            # If exponential fit fails, assign parameters to zero
             features["posttrig_exp_fit_N"] = 0
             features["posttrig_exp_fit_λ"] = 0
             features["posttrig_exp_fit_c"] = 0
+            features["posttrig_exp_fit_R2"] = 0
 
-        # Convert transient data to Pandas dataframe
+        # Convert feature set to Pandas dataframe
         df = pd.DataFrame(features, index=[0])
-        
+
         return df
 
 
@@ -199,6 +214,7 @@ def main():
         # Combine data directory with provided run number to open .h5 file in read mode
         h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
         with h5py.File(h5_path, "r") as h5file:
+            # TODO when opening h5 check for various things such as below and move into unified file eg utils
             # If run has no transients, skip
             if "sdr_data" not in h5file:
                 logging.warning(
