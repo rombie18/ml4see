@@ -66,22 +66,22 @@ def process_transient(h5_path, tran_name):
         # Get transient data from file
         transient = h5file["sdr_data"]["all"][tran_name]
 
-        # Get additional meta data
+        # Get run meta data
         fs = h5file["sdr_data"].attrs["sdr_info_fs"]
         len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
         dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
         event_len = len_pretrig + len_posttrig - dsp_ntaps
+        baseline_freq = transient.attrs["baseline_freq_mean_hz"]
 
-        # Subtract mean baseline frequency from each sample to get delta frequency
-        baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs[
-            "baseline_freq_mean_hz"
-        ]
-        baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
-            "baseline_freq_mean_hz"
-        ]
+        # Get additional transient meta data
+        # TODO subtract baseline variance from this transients to get a delta, use that as feature instead of pretrig std
+        baseline_freq = transient.attrs["baseline_freq_mean_hz"]
+        baseline_freq_var = transient.attrs["baseline_freq_mean_hz"]
+        x_lsb = transient.attrs["x_lsb"]
+        y_lsb = transient.attrs["y_lsb"]
 
-        # Construct time and frequency arrays
+        # Construct time and frequency arrays, subtract mean baseline frequency from each sample to get delta frequency
         tran_time = (
             np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         )
@@ -106,6 +106,8 @@ def process_transient(h5_path, tran_name):
         # Calculate features
         features = {}
         features["transient"] = tran_name
+        features["x_lsb"] = x_lsb
+        features["y_lsb"] = y_lsb
         features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
 
         # Try to fit exponential decay
