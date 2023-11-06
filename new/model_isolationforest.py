@@ -2,12 +2,16 @@ import os
 from matplotlib import pyplot as plt
 import pandas as pd
 import argparse
-from sklearn.metrics import classification_report
+from sklearn.metrics import confusion_matrix
 from sklearn.ensemble import IsolationForest
 import seaborn as sns
 
 from config import DATA_FEATURES_DIRECTORY, DATA_LABELED_DIRECTORY
 from utils import generatePlotTitle
+
+FEATURE_1 = "pretrig_std"
+FEATURE_2 = "posttrig_exp_fit_R2"
+FEATURE_3 = "posttrig_exp_fit_λ"
 
 # Initialise argument parser
 parser = argparse.ArgumentParser()
@@ -16,9 +20,13 @@ args = parser.parse_args()
 run_number = args.run_number
 
 # Combine labeled data with unlabeled extracted features
-df_features = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
-df_labeled = pd.read_csv(os.path.join(DATA_LABELED_DIRECTORY, f"run_{run_number:03d}.csv"))
-df = pd.merge(df_features, df_labeled, on='transient')
+df_features = pd.read_csv(
+    os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
+)
+df_labeled = pd.read_csv(
+    os.path.join(DATA_LABELED_DIRECTORY, f"run_{run_number:03d}.csv")
+)
+df = pd.merge(df_features, df_labeled, on="transient")
 df.type = df.type.astype("category")
 df.valid = df.valid.astype("category")
 
@@ -28,31 +36,40 @@ df_cleaned = df_cleaned.select_dtypes(include="number")
 
 # Assign target vectors
 X = df_cleaned
-y = df['valid']
+y = df["valid"]
 
-df_cleaned = df_cleaned[["posttrig_exp_fit_N", "posttrig_exp_fit_R2", "posttrig_exp_fit_λ"]]
+df_cleaned = df_cleaned[[FEATURE_1, FEATURE_2, FEATURE_3]]
 
 # Train classifier
-clf = IsolationForest(max_samples=100)
-y_pred = clf.fit_predict(X)
-y_pred = [0 if x == -1 else 1 for x in y_pred]
+clf = IsolationForest(contamination=0.075)
+clf.fit(X)
+y_pred_scores = clf.decision_function(X)
 
-print(classification_report(y, y_pred))
+threshold = 0
+y_pred = [0 if score < threshold else 1 for score in y_pred_scores]
+
+tn, fp, fn, tp = confusion_matrix(y, y_pred).ravel()
+
+print("Positive (1) = valid transient, Negative (0) = invalid transient")
+print("AP = Actual Positive, AN = Actual Negative")
+print("PP = Predicted Positive, PN = Predicted Negative")
+print("---------------------------------------")
+print("           CONFUSION MATRIX            ")
+print("---------------------------------------")
+print("\tAP\tAN")
+print(f"PP\t{tp}\t{fp}")
+print(f"PN\t{fn}\t{tn}")
 
 
 # -------------------
 
 
-df['valid'] = y_pred
-
-FEATURE_1 = "posttrig_exp_fit_N"
-FEATURE_2 = "posttrig_exp_fit_R2"
-FEATURE_3 = "posttrig_exp_fit_λ"
+df["valid"] = y_pred
 
 # Initialize the 3D graph
 fig = plt.figure()
 ax = fig.add_subplot(111, projection="3d")
-ax.view_init(elev=45., azim=60)
+ax.view_init(elev=10, azim=40)
 
 # Define scaled features as arrays
 xdata = df[FEATURE_1]
@@ -63,27 +80,24 @@ zdata = df[FEATURE_3]
 color_labels = df["valid"].unique()
 col_values = sns.color_palette(n_colors=len(color_labels))
 color_map = dict(zip(color_labels, col_values))
-colors = [color_map[label] for label in df['valid'].values]
+colors = [color_map[label] for label in df["valid"].values]
 
-# Add transient names to plot
+# Add outlier scores to plot
 # for i in range(len(xdata)):
-#     if random.random() < 0.1:
+#     if y_pred_scores[i] < threshold:
 #         ax.text(
-#             xdata[i], ydata[i], zdata[i], pca_df_scaled["transient"][i], fontsize='small'
-#         )
+#             xdata[i], ydata[i], zdata[i], f"{y_pred_scores[i]:.3f}", fontsize="small"
+#         ).set_clip_on(True)
 
 ax.scatter(xdata, ydata, zdata, c=colors, alpha=0.5)
-
-# Plot title of graph
-generatePlotTitle(ax, f"3D plot, run_{run_number:03d}", run_number)
 
 # Plot x, y, z labels
 ax.set_xlabel(FEATURE_1)
 ax.set_ylabel(FEATURE_2)
 ax.set_zlabel(FEATURE_3)
 
-ax.set_xlim(15e3, 25e3)
-ax.set_ylim(0.875, 1)
-ax.set_zlim(2e3, 3e3)
+ax.set_xlim(0, 500)
+ax.set_ylim(0.95, 1)
+ax.set_zlim(2.5e3, 5e3)
 
-plt.savefig(f"plots/model_isolationforest.png", bbox_inches="tight")
+plt.savefig(f"plots/model_isolationforest.png")
