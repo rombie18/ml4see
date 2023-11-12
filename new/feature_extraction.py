@@ -72,12 +72,11 @@ def process_transient(h5_path, tran_name):
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
         dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
         event_len = len_pretrig + len_posttrig - dsp_ntaps
-        baseline_freq = transient.attrs["baseline_freq_mean_hz"]
 
         # Get additional transient meta data
         # TODO subtract baseline variance from this transients to get a delta, use that as feature instead of pretrig std
         baseline_freq = transient.attrs["baseline_freq_mean_hz"]
-        baseline_freq_var = transient.attrs["baseline_freq_mean_hz"]
+        baseline_freq_std = transient.attrs["baseline_freq_std_hz"]
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
 

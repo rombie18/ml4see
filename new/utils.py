@@ -8,7 +8,7 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 from config import RUN_LOGBOOK_PATH, RUN_DUTPICS_DIRECTORY
 
-
+#TODO use h5 run meta data instead of combining with logbook.xlsx
 def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
     plt.suptitle(title, y=1)
 

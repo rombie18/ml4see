@@ -154,9 +154,11 @@ with h5py.File(h5_path, "r") as h5file:
 
     axis.set_title(f"Moving Average ({tran_name})")
 
+    min = np.min(tran_freq_ds)
+    min = min * 1.1
     max = np.max(tran_freq_ds)
     max = max * 1.1
-    axis.set_ylim(-5e3, max)
+    axis.set_ylim(min, max)
 
     axis.set_xlabel("Time (s)")
     axis.set_ylabel("Delta frequency (Hz)")
