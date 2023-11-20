@@ -3,19 +3,18 @@ from matplotlib import pyplot as plt
 import pandas as pd
 import argparse
 import numpy as np
+import warnings
 import seaborn as sns
-from sklearn.inspection import DecisionBoundaryDisplay
 from isotree import IsolationForest
 
 from config import DATA_FEATURES_DIRECTORY
-from utils import generatePlotTitle
 
 FEATURE_1 = "pretrig_std"
 FEATURE_2 = "posttrig_exp_fit_R2"
 FEATURE_3 = "posttrig_exp_fit_N"
 
-BLOCK_SIZE_X = 500
-BLOCK_SIZE_Y = 500
+BLOCK_SIZE_X = 2000
+BLOCK_SIZE_Y = 2000
 BLOCK_OVERLAP = 0
 
 
@@ -38,12 +37,7 @@ def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
     return blocks
 
 
-def prefit_reject(df):
-    return df[df["pretrig_std"] < 1000]
-
-
-def isolation_forest(dff, run_number):
-    # TODO inject one outlier and inlier to prevent all points belong to one class
+def inject_points(df):
     manual_points = [
         {
             "transient": "manu_000000",
@@ -68,15 +62,18 @@ def isolation_forest(dff, run_number):
             "posttrig_exp_fit_R2": 1,
         },
     ]
+
     for manual_point in manual_points:
-        dff = pd.concat([dff, pd.DataFrame([manual_point])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame([manual_point])], ignore_index=True)
 
-    dfs = [
-        dff[[FEATURE_1, FEATURE_2]],
-        dff[[FEATURE_1, FEATURE_3]],
-        dff[[FEATURE_2, FEATURE_3]],
-    ]
+    return df
 
+
+def isolation_forest(df: pd.DataFrame):
+    # Ignore annoying warnings
+    warnings.filterwarnings("ignore")
+
+    # Set up Isolation Forest model
     clf = IsolationForest(
         sample_size=None,
         ntrees=100,
@@ -86,58 +83,43 @@ def isolation_forest(dff, run_number):
         n_jobs=-1,
     )
 
-    fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(15, 10))
-    ax = ax.T.flatten()
-    fig.tight_layout(pad=5)
+    # Fit data on model and predict
+    y_pred = clf.fit_predict(df)
 
-    for y, df in enumerate(dfs):
-        clf.fit(df)
-        y_pred_scores = clf.decision_function(df)
-        threshold = 0.5
-        y_pred = [0 if score < threshold else 1 for score in y_pred_scores]
-
-        disp = DecisionBoundaryDisplay.from_estimator(
-            clf,
-            df,
-            response_method="decision_function",
-            alpha=0.5,
-            ax=ax[y],
-        )
-        disp.ax_.scatter(
-            df[df.columns[0]], df[df.columns[1]], c=y_pred, s=20, edgecolor="k"
-        )
-        fig.colorbar(disp.ax_.collections[1])
-
-        # Add transient names to points
-        for i, j in enumerate(list(df.index.values)):
-            if y_pred[i] == 1:
-                ax[y].text(
-                    df[df.columns[0]][j],
-                    df[df.columns[1]][j],
-                    dff["transient"][j],
-                    fontsize="small",
-                )
-
-    dfff = dff[[FEATURE_1, FEATURE_2, FEATURE_3]]
-    clf.fit(dfff)
-    y_pred_scores = clf.decision_function(dfff)
-    threshold = 0.5
-    y_pred = [0 if score < threshold else 1 for score in y_pred_scores]
-    outliers = [
-        dff["transient"][j]
-        for i, j in enumerate(list(dfff.index.values))
-        if y_pred[i] == 1
-    ]
-    print("Outliers in full Isolation Forest fit:")
-    print(outliers)
-
-    fig.suptitle("Comparison of Forest models")
-    plt.savefig(f"plots/test.png", bbox_inches="tight")
-    plt.close()
-
-    input()
+    # Reactivate warnings
+    warnings.filterwarnings("default")
 
     return y_pred
+
+
+def plot():
+    pass
+
+
+def processing_pipeline(df):
+    # Determine current block
+    block_x, block_y = df["block_x"].iloc[0], df["block_y"].iloc[0]
+    print(f"Processing block_x: {block_x}, block_y: {block_y}")
+
+    # Inject manual outliers to prevent no-outlier situation
+    dfi = inject_points(df)
+
+    # Apply Isolation Forest model on selected features
+    features = ["pretrig_std", "posttrig_exp_fit_N", "posttrig_exp_fit_R2"]
+    y_pred = isolation_forest(dfi[features])
+
+    # Undo effect of manual outlier injection
+    y_pred = y_pred[:-2]
+
+    # Decide outliers and inliers based on score
+    outlier_indices = [i for i, point in enumerate(y_pred) if point >= 0.5]
+    inlier_indices = [i for i, point in enumerate(y_pred) if point < 0.5]
+
+    # Get outlier ids in block
+    outliers = df.iloc[outlier_indices]["transient"].to_numpy()
+    inliers = df.iloc[inlier_indices]["transient"].to_numpy()
+
+    return inliers
 
 
 # Initialise argument parser
@@ -149,8 +131,26 @@ run_number = args.run_number
 # Combine labeled data with unlabeled extracted features
 df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
 
-# Manually reject transients with certain invalid characteristics
-df = prefit_reject(df)
-
+# Segment dataframe into blocks and apply processing to each block
 blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
-preds = blocks.apply(isolation_forest, run_number)
+blocks_filtered = blocks.apply(processing_pipeline)
+
+# Get list of inlier transient ids
+inliers = blocks_filtered.explode().to_list()
+
+df_filtered = df[df["transient"].isin(inliers)]
+df_heatmap = df_filtered.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"].mean().reset_index()
+heatmap_data_filtered  = df_heatmap.pivot(index='x_lsb', columns='y_lsb', values='posttrig_exp_fit_N')
+
+df_heatmap = df.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"].mean().reset_index()
+heatmap_data  = df_heatmap.pivot(index='x_lsb', columns='y_lsb', values='posttrig_exp_fit_N')
+
+fig, axs = plt.subplots(1, 2, figsize=(15, 10))
+fig.tight_layout(pad=3.5, w_pad=10)
+sns.heatmap(heatmap_data_filtered, ax=axs[0])
+sns.heatmap(heatmap_data, ax=axs[1])
+axs[0].set_title('Outliers filtered')
+axs[1].set_title('No filtering')
+
+plt.savefig(f"plots/heatmap_v1.png", bbox_inches="tight")
+plt.close()
