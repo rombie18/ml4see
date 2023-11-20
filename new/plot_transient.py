@@ -78,18 +78,6 @@ with h5py.File(h5_path, "r") as h5file:
         np.mean(tran_pretrig_freq_ds),
     )
 
-    minimum_exp_height = np.mean(tran_pretrig_freq_ds) + 2 * (
-        np.abs(np.max(tran_pretrig_freq_ds)) + np.abs(np.min(tran_pretrig_freq_ds))
-    )
-    boundaries = (
-        [
-            minimum_exp_height,
-            0,
-            -1e6,
-        ],
-        [1e6, 1e6, 1e6],
-    )
-
     try:
         # params: N, λ, c
         # model: (N - c) * np.exp(-λ * t) + c
@@ -98,7 +86,6 @@ with h5py.File(h5_path, "r") as h5file:
             tran_posttrig_time_ds,
             tran_posttrig_freq_ds,
             p0=initial_guess,
-            bounds=boundaries,
         )
 
         # Caluculate coefficient of determination (R²)
@@ -129,12 +116,6 @@ with h5py.File(h5_path, "r") as h5file:
 
     axis.plot(tran_time, tran_freq, ".")
     axis.plot(tran_time_ds, tran_freq_ds, ".-")
-
-    axis.axhline(
-        y=minimum_exp_height,
-        color="r",
-        linestyle="--",
-    )
 
     axis.axvline(
         x=tran_pretrig_time[-1],

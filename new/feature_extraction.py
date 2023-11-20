@@ -108,24 +108,13 @@ def process_transient(h5_path, tran_name):
         features["x_lsb"] = x_lsb
         features["y_lsb"] = y_lsb
         features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
+        features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
 
         # Try to fit exponential decay
         initial_guess = (
             np.max(tran_posttrig_freq_ds),
             1000,
             np.mean(tran_pretrig_freq_ds),
-        )
-
-        minimum_exp_height = np.mean(tran_pretrig_freq_ds) + 2 * (
-            np.abs(np.max(tran_pretrig_freq_ds)) + np.abs(np.min(tran_pretrig_freq_ds))
-        )
-        boundaries = (
-            [
-                minimum_exp_height,
-                0,
-                -1e6,
-            ],
-            [1e6, 1e6, 1e6],
         )
 
         try:
@@ -136,7 +125,6 @@ def process_transient(h5_path, tran_name):
                 tran_posttrig_time_ds,
                 tran_posttrig_freq_ds,
                 p0=initial_guess,
-                bounds=boundaries,
             )
 
             # Caluculate coefficient of determination (R²)
