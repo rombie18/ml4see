@@ -13,8 +13,8 @@ FEATURE_1 = "pretrig_std"
 FEATURE_2 = "posttrig_exp_fit_R2"
 FEATURE_3 = "posttrig_exp_fit_N"
 
-BLOCK_SIZE_X = 2000
-BLOCK_SIZE_Y = 2000
+BLOCK_SIZE_X = 100
+BLOCK_SIZE_Y = 100
 BLOCK_OVERLAP = 0
 
 
