@@ -14,10 +14,11 @@ FEATURES = [
     "posttrig_exp_fit_R2",
     "posttrig_exp_fit_N",
     "posttrig_exp_fit_λ",
+    "posttrig_std",
 ]
 
-BLOCK_SIZE_X = 2000
-BLOCK_SIZE_Y = 2000
+BLOCK_SIZE_X = 2500
+BLOCK_SIZE_Y = 2500
 BLOCK_OVERLAP = 0
 
 
@@ -216,7 +217,7 @@ for block in blocks_filtered:
 df_filtered = df[df["transient"].isin(inliers)]
 
 # If all transients get rejected at one position, interpolate lost data from neighboring positions
-df_filtered = interpolate_lost_data(df_filtered, df)
+# df_filtered = interpolate_lost_data(df_filtered, df)
 
 # Plot heatmap
 plot(df, df_filtered)
