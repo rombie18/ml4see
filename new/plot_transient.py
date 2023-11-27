@@ -77,6 +77,14 @@ with h5py.File(h5_path, "r") as h5file:
         1000,
         np.mean(tran_pretrig_freq_ds),
     )
+    boundaries = (
+        [
+            0,
+            0,
+            -np.inf,
+        ],
+        [np.inf, np.inf, np.inf],
+    )
 
     try:
         # params: N, λ, c
@@ -86,6 +94,7 @@ with h5py.File(h5_path, "r") as h5file:
             tran_posttrig_time_ds,
             tran_posttrig_freq_ds,
             p0=initial_guess,
+            bounds=boundaries
         )
 
         # Caluculate coefficient of determination (R²)

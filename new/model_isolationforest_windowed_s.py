@@ -9,12 +9,15 @@ from isotree import IsolationForest
 
 from config import DATA_FEATURES_DIRECTORY
 
-FEATURE_1 = "pretrig_std"
-FEATURE_2 = "posttrig_exp_fit_R2"
-FEATURE_3 = "posttrig_exp_fit_N"
+FEATURES = [
+    "pretrig_std",
+    "posttrig_exp_fit_R2",
+    "posttrig_exp_fit_N",
+    "posttrig_exp_fit_λ",
+]
 
-BLOCK_SIZE_X = 100
-BLOCK_SIZE_Y = 100
+BLOCK_SIZE_X = 2000
+BLOCK_SIZE_Y = 2000
 BLOCK_OVERLAP = 0
 
 
@@ -92,8 +95,38 @@ def isolation_forest(df: pd.DataFrame):
     return y_pred
 
 
-def plot():
-    pass
+def plot(df, df_filtered):
+    df_heatmap = (
+        df_filtered.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"]
+        .mean()
+        .reset_index()
+    )
+    heatmap_data_filtered = df_heatmap.pivot(
+        index="x_lsb", columns="y_lsb", values="posttrig_exp_fit_N"
+    )
+
+    df_heatmap = (
+        df.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"].mean().reset_index()
+    )
+    heatmap_data = df_heatmap.pivot(
+        index="x_lsb", columns="y_lsb", values="posttrig_exp_fit_N"
+    )
+
+    # Mark missing data with vibrant color
+    sns.set_style(rc={"axes.facecolor": "limegreen"})
+
+    fig, axs = plt.subplots(1, 2, figsize=(30, 20))
+    fig.tight_layout(pad=3.5, w_pad=10)
+    h1 = sns.heatmap(heatmap_data_filtered, ax=axs[0])
+    h2 = sns.heatmap(heatmap_data, ax=axs[1])
+    axs[0].set_title("Outliers filtered")
+    axs[1].set_title("No filtering")
+
+    # Use color scale from filtered plot
+    h2.collections[0].set_clim(h1.collections[0].get_clim())
+
+    plt.savefig(f"plots/heatmap_v1.png", bbox_inches="tight")
+    plt.close()
 
 
 def processing_pipeline(df):
@@ -105,8 +138,7 @@ def processing_pipeline(df):
     dfi = inject_points(df)
 
     # Apply Isolation Forest model on selected features
-    features = ["pretrig_std", "posttrig_exp_fit_N", "posttrig_exp_fit_R2"]
-    y_pred = isolation_forest(dfi[features])
+    y_pred = isolation_forest(dfi[FEATURES])
 
     # Undo effect of manual outlier injection
     y_pred = y_pred[:-2]
@@ -116,10 +148,48 @@ def processing_pipeline(df):
     inlier_indices = [i for i, point in enumerate(y_pred) if point < 0.5]
 
     # Get outlier ids in block
-    outliers = df.iloc[outlier_indices]["transient"].to_numpy()
-    inliers = df.iloc[inlier_indices]["transient"].to_numpy()
+    outliers = df.iloc[outlier_indices]["transient"].tolist()
+    inliers = df.iloc[inlier_indices]["transient"].tolist()
 
-    return inliers
+    return outliers, inliers
+
+
+def interpolate_lost_data(df, df_original):
+    # When all points on same position are rejected as outlier, no data is available
+    # --> Interpolate lost data points from neighboring points
+    STEP_X = 495
+    STEP_Y = 495
+    number = 0
+    positions = df_original.groupby(["x_lsb", "y_lsb"])["transient"]
+    for position, group in positions:
+        x_lsb, y_lsb = position
+        transients = group.values
+        # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
+        if not any(transient in inliers for transient in transients):
+            select_neighbors = (
+                (df["x_lsb"] < x_lsb + STEP_X)
+                & (df["x_lsb"] > x_lsb - STEP_X)
+                & (df["y_lsb"] < y_lsb + STEP_Y)
+                & (df["y_lsb"] > y_lsb - STEP_Y)
+            )
+
+            neighbors = df[select_neighbors]
+
+            point = {
+                "transient": f"intr_{number:03d}",
+                "x_lsb": x_lsb,
+                "y_lsb": y_lsb,
+                "pretrig_std": neighbors["pretrig_std"].mean(),
+                "posttrig_std": neighbors["posttrig_std"].mean(),
+                "posttrig_exp_fit_N": neighbors["posttrig_exp_fit_N"].mean(),
+                "posttrig_exp_fit_λ": neighbors["posttrig_exp_fit_λ"].mean(),
+                "posttrig_exp_fit_c": neighbors["posttrig_exp_fit_c"].mean(),
+                "posttrig_exp_fit_R2": neighbors["posttrig_exp_fit_R2"].mean(),
+            }
+            number = number + 1
+            df = pd.concat([df, pd.DataFrame([point])], ignore_index=True)
+
+    return df
 
 
 # Initialise argument parser
@@ -135,22 +205,18 @@ df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.cs
 blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
 blocks_filtered = blocks.apply(processing_pipeline)
 
-# Get list of inlier transient ids
-inliers = blocks_filtered.explode().to_list()
+# Get transient ids of outliers and inliers
+outliers, inliers = [], []
+for block in blocks_filtered:
+    local_outliers, local_inliers = block
+    outliers.extend(local_outliers)
+    inliers.extend(local_inliers)
 
+# Filter dataframe based on inliers-only
 df_filtered = df[df["transient"].isin(inliers)]
-df_heatmap = df_filtered.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"].mean().reset_index()
-heatmap_data_filtered  = df_heatmap.pivot(index='x_lsb', columns='y_lsb', values='posttrig_exp_fit_N')
 
-df_heatmap = df.groupby(["x_lsb", "y_lsb"])["posttrig_exp_fit_N"].mean().reset_index()
-heatmap_data  = df_heatmap.pivot(index='x_lsb', columns='y_lsb', values='posttrig_exp_fit_N')
+# If all transients get rejected at one position, interpolate lost data from neighboring positions
+df_filtered = interpolate_lost_data(df_filtered, df)
 
-fig, axs = plt.subplots(1, 2, figsize=(15, 10))
-fig.tight_layout(pad=3.5, w_pad=10)
-sns.heatmap(heatmap_data_filtered, ax=axs[0])
-sns.heatmap(heatmap_data, ax=axs[1])
-axs[0].set_title('Outliers filtered')
-axs[1].set_title('No filtering')
-
-plt.savefig(f"plots/heatmap_v1.png", bbox_inches="tight")
-plt.close()
+# Plot heatmap
+plot(df, df_filtered)
