@@ -158,8 +158,8 @@ def processing_pipeline(df):
 def interpolate_lost_data(df, df_original):
     # When all points on same position are rejected as outlier, no data is available
     # --> Interpolate lost data points from neighboring points
-    STEP_X = 495
-    STEP_Y = 495
+    STEP_X = 495 * 1.5
+    STEP_Y = 495 * 1.5
     number = 0
     positions = df_original.groupby(["x_lsb", "y_lsb"])["transient"]
     for position, group in positions:
@@ -217,7 +217,7 @@ for block in blocks_filtered:
 df_filtered = df[df["transient"].isin(inliers)]
 
 # If all transients get rejected at one position, interpolate lost data from neighboring positions
-# df_filtered = interpolate_lost_data(df_filtered, df)
+df_filtered = interpolate_lost_data(df_filtered, df)
 
 # Plot heatmap
 plot(df, df_filtered)

@@ -5,6 +5,7 @@ PRETRIG_GUARD_SAMPLES = 100
 WINDOW_SIZE = 500
 DOWNSAMPLE_FACTOR = 250
 
+# Paths and directories should always be referenced using absolute paths
 RUN_LOGBOOK_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/logbook/mcb2022_logbook.xlsx"
 RUN_DUTPICS_DIRECTORY = "/home/r0835817/2023-WoutRombouts/ml4see/new/dut_position_pics"
 
