@@ -96,7 +96,7 @@ def main():
     # Function that will verify file integrity using a md5sum
     def validate_file(run):
         # Compose full path where to save the downloaded run
-        file_path = os.path.join(DATA_DOWNLOAD_DIRECTORY, run["name"] + ".tar")
+        file_path = os.path.join(DATA_DOWNLOAD_DIRECTORY, run["url"].split("/")[-1])
 
         # If run is not found on disk or has no md5sum available, skip
         if not os.path.exists(file_path):

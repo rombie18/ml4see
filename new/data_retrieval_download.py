@@ -83,6 +83,7 @@ def main():
     # Execute curl command
     for i in range(1, DOWNLOAD_RETRIES):
         try:
+            # FIXME on curl command failure, doesn't catch error to except block
             subprocess.run(command.split(), cwd=DATA_DOWNLOAD_DIRECTORY, check=True)
             break
         except subprocess.CalledProcessError:
