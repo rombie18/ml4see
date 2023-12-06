@@ -36,6 +36,7 @@ Example Usage:
     python data_retrieval_verify.py 1 2 --keep
 """
 
+import csv
 import os
 import json
 import logging
@@ -48,6 +49,7 @@ from dask.distributed import Client, LocalCluster
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
 
+
 def main():
     # Initialise logging
     # FIXME logging not working in Dask workers (other processes)
@@ -55,60 +57,76 @@ def main():
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         handlers=[
-            logging.FileHandler("data_retrieval_verify.log", mode='w'),
-            logging.StreamHandler()
-        ]
+            logging.FileHandler("data_retrieval_verify.log", mode="w"),
+            logging.StreamHandler(),
+        ],
     )
     logging.info("Starting data retrieval verify process...")
-    
+
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
-    parser.add_argument("--keep", action="store_true", help="Do not delete file if verification process fails")
+    parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
+    parser.add_argument(
+        "--keep",
+        action="store_true",
+        help="Do not delete file if verification process fails",
+    )
     args = parser.parse_args()
 
     # Check if directories exist
     if not os.path.exists(DATA_DOWNLOAD_DIRECTORY):
-        logging.error(f"The data download directory does not exist at {DATA_DOWNLOAD_DIRECTORY}.")
+        logging.error(
+            f"The data download directory does not exist at {DATA_DOWNLOAD_DIRECTORY}."
+        )
         exit()
-        
+
     if not os.path.exists(DATA_SUMMARY_PATH):
         logging.error(f"The data summary file does not exist at {DATA_SUMMARY_PATH}.")
         exit()
-    
+
     # Get run information from summary file
-    runs = []
-    with open(DATA_SUMMARY_PATH, 'r', encoding="utf-8") as file:
-        runs = json.load(file)
-        
+    runs = read_csv(DATA_SUMMARY_PATH)
+
     # If runs are provided as arguments, only verify the specified runs
-    if (len(args.run_numbers) > 0):
+    if len(args.run_numbers) > 0:
         logging.info(f"Runs argument present, only verifying: {args.run_numbers}")
         run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
         runs = [run for run in runs if run["name"] in run_numbers]
-    
+
     # Function that will verify file integrity using a md5sum
     def validate_file(run):
         # Compose full path where to save the downloaded run
         file_path = os.path.join(DATA_DOWNLOAD_DIRECTORY, run["name"] + ".tar")
-        
+
         # If run is not found on disk or has no md5sum available, skip
         if not os.path.exists(file_path):
-            logging.warning(f"Skip validating {run['name']} since it was not found on disk!")
+            logging.warning(
+                f"Skip validating {run['name']} since it was not found on disk!"
+            )
             return
-        
+
         if "md5sum" not in run:
-            logging.warning(f"Skip validating {run['name']} since it has no md5 checksum available!")
+            logging.warning(
+                f"Skip validating {run['name']} since it has no md5 checksum available!"
+            )
             return
-            
+
         # Execute md5sum command and pipe output to this python script and select result
-        result = subprocess.run(['md5sum', file_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, check=True)
+        result = subprocess.run(
+            ["md5sum", file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=True,
+        )
         md5_returned = result.stdout.split()[0]
-        
+
         # Check if calculated md5sum matches the provided one in the data summary file
         if not md5_returned == run["md5sum"]:
             logging.error(f"Validation of {run['name']} failed!")
-            logging.error(f"Got {md5_returned} as checksum but expected {run['md5sum']}.")
+            logging.error(
+                f"Got {md5_returned} as checksum but expected {run['md5sum']}."
+            )
             # If the keep flag is not set, delete the file if verification fails
             if not args.keep:
                 os.remove(file_path)
@@ -126,11 +144,30 @@ def main():
     results = tasks.compute()
 
 
+def read_csv(file_path):
+    result_array = []
+
+    with open(file_path, "r") as csv_file:
+        csv_reader = csv.reader(csv_file)
+
+        # Read the header to get column names
+        headers = next(csv_reader)
+
+        # Read the remaining rows and populate the result_array
+        for row in csv_reader:
+            line_dict = {}
+            for i, value in enumerate(row):
+                line_dict[headers[i]] = value
+            result_array.append(line_dict)
+
+    return result_array
+
+
 if __name__ == "__main__":
     # Set-up Dask local cluster for distributed processing
     cluster = LocalCluster()
     client = Client(cluster)
-    
+
     try:
         main()
     except:
