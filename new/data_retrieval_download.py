@@ -1,12 +1,18 @@
+"""
+data_retrieval_download.py
+
+This script is responsible for downloading data files from specified URLs in parallel. It supports resuming interrupted downloads, and users can provide specific run numbers to download.
+
+"""
+
 import csv
 import os
 import logging
 import argparse
 import concurrent.futures
-
 import requests
 
-from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
+from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH, DOWNLOAD_ATTEMPTS
 
 
 def main():
@@ -48,17 +54,26 @@ def main():
     # Start downloading the files in parallel
     # TODO find way to gracefully kill downloading on sigterm
     logging.info("Starting file downloads")
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = [
             executor.submit(
                 download_file,
                 run["url"],
                 DATA_DOWNLOAD_DIRECTORY,
                 run["url"].split("/")[-1],
+                attempts=DOWNLOAD_ATTEMPTS,
             )
             for run in runs
         ]
-        concurrent.futures.wait(futures)
+
+        # TODO find way to hide tracebacks and junk output on keyboard interrupt
+        try:
+            concurrent.futures.wait(futures)
+        except KeyboardInterrupt:
+            logging.warning("Ctrl+C pressed. Trying to cancel remaining tasks...")
+            for future in futures:
+                future.cancel()
+            exit()
 
 
 def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):
@@ -79,14 +94,16 @@ def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):
 
         try:
             # Get file size from server
-            with requests.head(url) as response:
-                server_content_length = int(response.headers.get('Content-Length', ''))
-            
+            with requests.head(url) as head_response:
+                server_content_length = int(head_response.headers.get("Content-Length", ""))
+
             # Determine if file should be (partially) downloaded or not
             if os.path.exists(local_path):
                 local_content_length = os.path.getsize(local_path)
                 if local_content_length == server_content_length:
-                    logging.info(f"Full file {file_name} already exists locally, skipping download")
+                    logging.info(
+                        f"Full file {file_name} already exists locally, skipping download"
+                    )
                     return
                 else:
                     logging.debug(f"Partial file {file_name} exists locally")
@@ -95,21 +112,21 @@ def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):
                 logging.debug(f"File {file_name} does not exist locally")
                 local_content_length = 0
                 resume_header = {}
-                
+
             # Start file download
             logging.debug(f"Starting download for file {file_name}")
             with requests.get(url, stream=True, headers=resume_header) as response:
                 response.raise_for_status()
 
                 if (
-                    "Accept-Ranges" not in response.headers
-                    or response.headers["Accept-Ranges"] == "none"
+                    "Accept-Ranges" not in head_response.headers
+                    or head_response.headers["Accept-Ranges"] == "none"
                 ):
                     if local_content_length != 0:
                         logging.warning(
                             "Server does not support partial content. Unable to resume download."
                         )
-                        
+
                     with open(local_path, "wb") as file:
                         logging.debug(f"Writing file {file_name} to disk")
                         for chunk in response.iter_content(chunk_size):
