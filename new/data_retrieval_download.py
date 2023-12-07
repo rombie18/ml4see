@@ -1,26 +1,3 @@
-"""
-data_retrieval_download.py
-
-This script facilitates the download of data based on run numbers specified as command-line arguments. The script interacts with a data summary file to retrieve information about available runs and uses curl to download the selected runs.
-
-Usage:
-    python data_retrieval_download.py [run_numbers] [--keep]
-
-Arguments:
-    run_numbers (int, optional): Specify one or more run numbers to download. If no run numbers are provided, the script will prompt the user to select runs interactively.
-    --keep: Optional flag to keep downloaded files even if the download process fails.
-
-Dependencies:
-    - Python 3.x
-    - curl
-    - inquirer
-    - config.py (imported for configuration constants)
-
-Example:
-    python data_retrieval_download.py 1 2 3 --keep
-
-"""
-
 import csv
 import os
 import logging
@@ -69,6 +46,7 @@ def main():
         runs = [run for run in runs if run["name"] in run_numbers]
 
     # Start downloading the files in parallel
+    # TODO find way to gracefully kill downloading on sigterm
     logging.info("Starting file downloads")
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = [
