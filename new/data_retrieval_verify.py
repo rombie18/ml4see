@@ -1,39 +1,31 @@
 """
 data_retrieval_verify.py
 
-This Python script is designed to verify the integrity of downloaded data files by comparing their MD5 checksums with the values provided in a JSON summary file. It provides options to verify specific runs and handles verification failures, allowing for the deletion of corrupted files. Configuration constants are imported from an external module for flexibility.
+This script performs the verification of file integrity by comparing calculated MD5 checksums
+with the expected MD5 checksums obtained from a data summary file. It supports parallel validation
+of multiple files, and users can specify run numbers as command-line arguments for selective validation.
 
 Usage:
-    python data_retrieval_verify.py [run_numbers [run_numbers ...]] [--keep]
+    python data_retrieval_verify.py [run_numbers ...] [--keep]
 
-Arguments:
-    run_numbers (optional): A list of integers representing specific run numbers to verify. If provided, only the runs with matching numbers will be verified.
-    --keep (optional): If this flag is set, files with failed verification will not be deleted.
+Parameters:
+    - run_numbers (int, optional): Specify one or more run numbers to verify. If not provided,
+                                   all runs from the data summary file will be verified.
+    - --keep (optional): If present, the script will not delete files on verification failure.
 
-Configuration (imported from 'config.py'):
-    - DATA_DOWNLOAD_DIRECTORY: The directory where downloaded tar files are located.
-    - DATA_SUMMARY_PATH: The path to the JSON summary file containing information about the data runs.
+The script uses the `config` module for data download directory and data summary file path.
 
-The script performs the following steps:
-1. Initializes logging to record verification progress and errors.
-2. Parses command-line arguments to optionally specify which runs to verify and whether to keep files with failed verification.
-3. Checks if the specified data directories and summary file exist; exits if not.
-4. Reads run information from the JSON summary file.
-5. Filters the runs based on the provided run numbers, if any.
-6. Defines a function to validate file integrity using MD5 checksums.
-7. Sets up a Dask bag with the list of runs to parallelize the verification process.
-8. Schedules the validate_file function for each run in the bag.
-9. Executes the verification tasks in parallel.
-10. Closes the Dask client and logs any fatal exceptions.
+Functions:
+    - main(): The main entry point for the script.
+    - validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True): Validates the integrity of a file.
+    - calculate_md5(file_path, buffer_size=32768): Calculates the MD5 checksum of a file.
+    - read_csv(file_path): Reads a CSV file and returns its content as a list of dictionaries.
 
-Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+Note: This script requires the `config` module, and the `validate_file`, `calculate_md5`, and `read_csv` functions
+      assume the correct implementation of the `hashlib` module for MD5 checksum calculation.
 
 Example Usage:
-- Verify all downloaded runs:
-    python data_retrieval_verify.py
-
-- Verify specific runs (e.g., run numbers 1 and 2) and keep files with failed verification:
-    python data_retrieval_verify.py 1 2 --keep
+    python data_retrieval_verify.py 1 2 3 --keep
 """
 
 import csv
@@ -42,17 +34,13 @@ import json
 import logging
 import subprocess
 import argparse
-
-import dask.dataframe as dd
-import dask.bag as db
-from dask.distributed import Client, LocalCluster
+import concurrent.futures
+import hashlib
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
 
-
 def main():
     # Initialise logging
-    # FIXME logging not working in Dask workers (other processes)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
@@ -92,56 +80,128 @@ def main():
         logging.info(f"Runs argument present, only verifying: {args.run_numbers}")
         run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
         runs = [run for run in runs if run["name"] in run_numbers]
-
-    # Function that will verify file integrity using a md5sum
-    def validate_file(run):
-        # Compose full path where to save the downloaded run
-        file_path = os.path.join(DATA_DOWNLOAD_DIRECTORY, run["url"].split("/")[-1])
-
-        # If run is not found on disk or has no md5sum available, skip
-        if not os.path.exists(file_path):
-            logging.warning(
-                f"Skip validating {run['name']} since it was not found on disk!"
+        
+    # Start calculating md5sums in parallel
+    # TODO find way to gracefully kill downloading on sigterm
+    logging.info("Validating files")
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = [
+            executor.submit(
+                validate_file,
+                DATA_DOWNLOAD_DIRECTORY,
+                run["url"].split("/")[-1],
+                run["md5sum"],
+                keep_on_fail=args.keep
             )
-            return
+            for run in runs
+        ]
 
-        if "md5sum" not in run:
-            logging.warning(
-                f"Skip validating {run['name']} since it has no md5 checksum available!"
-            )
-            return
+        # TODO find way to hide tracebacks and junk output on keyboard interrupt
+        try:
+            concurrent.futures.wait(futures)
+        except KeyboardInterrupt:
+            logging.warning("Ctrl+C pressed. Trying to cancel remaining tasks...")
+            for future in futures:
+                future.cancel()
+            exit()
+            
 
-        # Execute md5sum command and pipe output to this python script and select result
-        result = subprocess.run(
-            ["md5sum", file_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=True,
+def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
+    """
+    Validate the integrity of a file by comparing its calculated MD5 checksum
+    with the expected MD5 checksum.
+
+    Parameters:
+    - working_dir (str): The directory where the file is located.
+    - file_name (str): The name of the file to be validated.
+    - expected_md5sum (str): The expected MD5 checksum to compare with.
+    - keep_on_fail (bool): If True, keeps the file on validation failure; if False, deletes the file.
+
+    The function performs the following steps:
+    1. Composes the full path of the file using the working directory and file name.
+    2. Logs an informational message about the validation process.
+    3. Checks if the file exists on disk; if not, logs a warning and skips validation.
+    4. Checks if the file has an MD5 checksum available; if not, logs a warning and skips validation.
+    5. Calculates the MD5 checksum of the file using the `calculate_md5` function.
+    6. Compares the calculated MD5 checksum with the expected MD5 checksum.
+    7. If the checksums do not match, logs an error, and optionally deletes the file if the keep flag is not set.
+    8. If the checksums match, logs a success message.
+
+    Note: The `calculate_md5` function is assumed to be available and correctly implemented.
+
+    Example Usage:
+    ```python
+    working_directory = '/path/to/working/directory'
+    file_to_validate = 'example_file.txt'
+    expected_checksum = 'e7d4a37e45a7a6c1c7f2b5b33fb14533'
+    validate_file(working_directory, file_to_validate, expected_checksum)
+    ```
+
+    """
+    
+    logging.info(f"Validating {file_name}")
+    
+    # Compose full path where to save the downloaded run
+    file_path = os.path.join(working_dir, file_name)
+        
+    # If run is not found on disk or has no md5sum available, skip
+    if not os.path.exists(file_path):
+        logging.warning(
+            f"Skip validating {file_name} since it was not found on disk!"
         )
-        md5_returned = result.stdout.split()[0]
-
-        # Check if calculated md5sum matches the provided one in the data summary file
-        if not md5_returned == run["md5sum"]:
-            logging.error(f"Validation of {run['name']} failed!")
-            logging.error(
-                f"Got {md5_returned} as checksum but expected {run['md5sum']}."
-            )
-            # If the keep flag is not set, delete the file if verification fails
-            if not args.keep:
-                os.remove(file_path)
-            return
-
-        logging.info(f"Validation of {run['md5sum']} succeeded.")
         return
 
-    # Set up bag with runs
-    bag = db.from_sequence(runs)
-    # For each run, schedule the validate file function
-    tasks = bag.map(validate_file)
+    if expected_md5sum == "":
+        logging.warning(
+            f"Skip validating {file_name} since it has no md5 checksum available!"
+        )
+        return
+            
+    # Calculate md5sum of file
+    calculated_md5sum = calculate_md5(file_path)
+            
+    # Check if calculated md5sum matches the provided one in the data summary file
+    if not calculated_md5sum == expected_md5sum:
+        logging.error(f"Validation of {file_name} failed!")
+        logging.debug(
+            f"Got {calculated_md5sum} as checksum but expected {expected_md5sum}."
+        )
+        # If the keep flag is not set, delete the file if verification fails
+        logging.info(f"Deleting file {file_name} since it is corrupt.")
+        if not keep_on_fail:
+            os.remove(file_path)
+        return
 
-    # Execute task
-    results = tasks.compute()
+    logging.info(f"Validation of {file_name} succeeded.")
+    
+
+def calculate_md5(file_path, buffer_size=32768):
+    """
+    Calculate the MD5 checksum of a file.
+
+    Parameters:
+    - file_path (str): The path to the file.
+    - buffer_size (int): The size of the buffer for reading the file.
+
+    Returns:
+    - md5_checksum (str): The MD5 checksum of the file.
+    """
+    
+    logging.debug(f"Calculating md5sum of {file_path} with buffer size of {buffer_size}")
+
+    # Create an MD5 hash object
+    md5_hash = hashlib.md5()
+
+    # Open the file in binary mode
+    with open(file_path, "rb") as file:
+        # Read the file in chunks and update the hash
+        while chunk := file.read(buffer_size):
+            md5_hash.update(chunk)
+
+    # Get the hexadecimal representation of the hash
+    md5_checksum = md5_hash.hexdigest()
+
+    return md5_checksum
 
 
 def read_csv(file_path):
@@ -164,13 +224,7 @@ def read_csv(file_path):
 
 
 if __name__ == "__main__":
-    # Set-up Dask local cluster for distributed processing
-    cluster = LocalCluster()
-    client = Client(cluster)
-
     try:
         main()
     except:
         logging.exception("Fatal exception in main")
-    finally:
-        client.close()

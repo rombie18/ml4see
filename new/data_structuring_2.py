@@ -1,4 +1,7 @@
-"""Processing stage 2: annotate baseline data"""
+"""
+Processing stage 2: annotate baseline data
+(script by Stefan)
+"""
 
 import argparse
 import logging

@@ -1,4 +1,8 @@
-"""Create consolidated HDF5 file for a single run"""
+"""
+Create consolidated HDF5 file for a single run
+(script by Stefan)
+"""
+
 import argparse
 import os
 import pathlib

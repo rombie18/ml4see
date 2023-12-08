@@ -1,8 +1,34 @@
+
+Certainly! Here's a docstring for the data_retrieval_extract Python script:
+
+python
+Copy code
 """
 data_retrieval_extract.py
 
-This script extracts data from downloaded tar files in parallel using multiple processes. It supports extracting specific runs if run numbers are provided as command-line arguments.
+This script performs the extraction of downloaded tar files in parallel, using multiple processes.
+It extracts the contents of tar files into a specified output directory. The script supports
+extracting specific runs by providing run numbers as command-line arguments.
 
+Usage:
+    python data_retrieval_extract.py [run_numbers ...]
+
+Parameters:
+    - run_numbers (int, optional): Specify one or more run numbers to extract. If not provided,
+                                   all runs from the data download directory will be extracted.
+
+The script uses the `config` module for data download and raw data directories.
+
+Functions:
+    - main(): The main entry point for the script.
+    - parallel_untar(tar_file, output_dir): Extracts a tar file in parallel using multiple processes.
+    - untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end): Extracts a chunk of a tar file.
+
+Note: This script requires the `config` module, and the `parallel_untar` and `untar_chunk` functions
+      assume the correct implementation of the `tarfile` module and support for concurrent processing.
+
+Example Usage:
+    python data_retrieval_extract.py 1 2 3
 """
 
 import os

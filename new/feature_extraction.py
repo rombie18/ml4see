@@ -1,39 +1,30 @@
 """
 feature_extraction.py
 
-This Python script is designed to perform feature extraction from raw data files and save the extracted features to CSV files. It utilizes the `tsfresh` library for feature extraction, Dask for parallel processing, and configuration constants imported from an external module for flexibility.
+This script extracts features from transients stored in HDF5 files and saves the results
+as CSV files. It supports parallel processing of transients using Dask and requires the
+`config` module for data directories and various parameters.
 
 Usage:
-    python feature_extraction.py [run_numbers [run_numbers ...]]
+    python feature_extraction.py [run_numbers ...]
 
-Arguments:
-    run_numbers (optional): A list of integers representing specific run numbers to process and extract features from.
+Parameters:
+    - run_numbers (int, optional): Specify one or more run numbers to extract features. If not provided,
+                                   features will be extracted for all runs found in the structured data directory.
 
-Configuration (imported from 'config.py'):
-    - DATA_STRUCTURED_DIRECTORY: The directory where raw data files (in HDF5 format) are located.
-    - DATA_FEATURES_DIRECTORY: The directory where extracted features will be saved.
-    - FC_PARAMETERS: Feature extraction parameters (configured based on your requirements).
-    - WINDOW_SIZE: Size of the moving average window for filtering transient data.
-    - DOWNSAMPLE_FACTOR: Factor for downsampling time and frequency data.
+The script uses the `config` module for data directories and parameters, as well as the `utils` module for some utility functions.
 
-The script performs the following steps:
-1. Initializes logging to record feature extraction progress and errors.
-2. Parses command-line arguments to optionally specify which runs to process and extract features from.
-3. Sets Pandas options for better readability of output.
-4. Checks if the specified data directories exist; exits if not.
-5. Iterates through the provided run numbers, processing each run individually.
-6. Reads data from HDF5 files, applies filtering, downsampling, and prepares the data for feature extraction.
-7. Extracts features using the `tsfresh` library and saves them to CSV files.
-8. Closes the Dask client and logs any fatal exceptions.
+Functions:
+    - process_transient(h5_path, tran_name): Processes a single transient from an HDF5 file and returns a Pandas DataFrame
+                                             containing the extracted features.
+    - main(): The main entry point for the script, extracts features for all specified run numbers or all available runs.
+               Features are saved as CSV files in the features data directory.
 
-Note: The script assumes that it is executed using a Dask cluster for parallel processing.
+Note: This script requires the `config` and `utils` modules, and the `process_transient` function assumes the existence
+      and correctness of the `require_processing_stage`, `moving_average`, and `exponential_decay` functions.
 
 Example Usage:
-- Extract features from all available runs:
-    python feature_extraction.py
-
-- Extract features from specific runs (e.g., run numbers 1 and 2):
-    python feature_extraction.py 1 2
+    python feature_extraction.py 1 2 3
 """
 
 import os

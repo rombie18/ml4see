@@ -1,8 +1,29 @@
 """
 data_retrieval_download.py
 
-This script is responsible for downloading data files from specified URLs in parallel. It supports resuming interrupted downloads, and users can provide specific run numbers to download.
+This script facilitates the downloading of files in parallel, with the ability to resume interrupted downloads.
+It reads run information from a data summary file, allowing users to download specific runs by providing
+run numbers as command-line arguments.
 
+Usage:
+    python data_retrieval_download.py [run_numbers ...]
+
+Parameters:
+    - run_numbers (int, optional): Specify one or more run numbers to download. If not provided,
+                                   all runs from the data summary file will be downloaded.
+
+The script uses the `config` module for data download directory, data summary file path, and download attempts.
+
+Functions:
+    - main(): The main entry point for the script.
+    - download_file(url, working_dir, file_name, attempts=5, chunk_size=1024): Download a file with the ability to resume if the download is interrupted.
+    - read_csv(file_path): Reads a CSV file and returns its content as a list of dictionaries.
+
+Note: This script requires the `config` module, and the `download_file` and `read_csv` functions assume the correct implementation
+      of the `requests` module for handling HTTP requests and responses.
+
+Example Usage:
+    python data_retrieval_download.py 1 2 3
 """
 
 import csv
@@ -95,7 +116,9 @@ def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):
         try:
             # Get file size from server
             with requests.head(url) as head_response:
-                server_content_length = int(head_response.headers.get("Content-Length", ""))
+                server_content_length = int(
+                    head_response.headers.get("Content-Length", "")
+                )
 
             # Determine if file should be (partially) downloaded or not
             if os.path.exists(local_path):

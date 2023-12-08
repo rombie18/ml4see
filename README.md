@@ -6,23 +6,19 @@ In this repository a comprehensive data processing pipeline is designed that all
 ## Summary of scripts
 `data_retrieval_download.py`
 
-This Python script is designed to download data files specified in a JSON summary file, providing options to download specific runs and handling failed downloads. It utilizes the Dask library for parallel processing and configuration constants from an external module for flexibility.
+The "data_retrieval_download.py" script enables parallel file downloads with the ability to resume interrupted transfers. Users can specify run numbers as command-line arguments to download specific runs. The script utilizes the config module for configuration details, including the data download directory and download attempts. It relies on the requests module for HTTP interactions. Key functions include main(), responsible for initializing the process, parsing arguments, and orchestrating downloads; download_file(), facilitating file downloads with resumption capabilities; and read_csv(), which reads a CSV file into a list of dictionaries. The script handles interruptions gracefully and supports concurrent downloads using a process pool.
 
 `data_retrieval_extract.py`
 
-This Python script is designed to extract files from downloaded tar archives into a specified raw data directory. It provides options to extract files from specific runs and utilizes configuration constants for flexibility. It also leverages Dask for parallel processing.
+The "data_retrieval_extract.py" script facilitates the parallel extraction of downloaded tar files, employing multiple processes for efficiency. Users can specify run numbers as command-line arguments to extract specific runs. The script utilizes the config module for data download and raw data directories. Key functions include main(), responsible for initializing the process, parsing arguments, and orchestrating the extraction; parallel_untar(), which extracts a tar file in parallel using multiple processes; and untar_chunk(), which extracts a chunk of a tar file. The script supports interruption handling and concurrent extraction using process pools.
 
 `data_retrieval_verify.py`
 
-This Python script is designed to verify the integrity of downloaded data files by comparing their MD5 checksums with the values provided in a JSON summary file. It provides options to verify specific runs and handles verification failures, allowing for the deletion of corrupted files. Configuration constants are imported for flexibility, and Dask is used for parallel processing.
+The "data_retrieval_verify.py" script verifies file integrity by comparing calculated MD5 checksums with expected checksums obtained from a data summary file. Users can specify run numbers as command-line arguments for selective validation. The script supports parallel validation of multiple files and includes an optional flag (--keep) to retain files on verification failure. Utilizing the config module for data download directory and data summary file path, the script relies on functions like validate_file, calculate_md5, and read_csv. The validate_file function performs the validation process, checking file existence and MD5 checksum matching, logging outcomes, and optionally deleting corrupt files. The script handles parallel processing using process pools and logs information and errors.
 
 `feature_extraction.py`
 
-This Python script performs feature extraction from raw data files and saves the extracted features to CSV files. It utilizes the tsfresh library for feature extraction, Dask for parallel processing, and configuration constants for flexibility.
-
-`feature_selection.py`
-
-This Python script performs feature selection based on relevance analysis using the tsfresh library. It reads feature data from CSV files, drops irrelevant features, and saves the relevance table to a CSV file. Configuration constants are imported for flexibility.
+The "feature_extraction.py" script extracts features from transients stored in HDF5 files and saves the results as CSV files. It supports parallel processing of transients using Dask and requires the config module for data directories and various parameters, as well as the utils module for some utility functions. Users can specify run numbers as command-line arguments for selective feature extraction, or if not provided, features will be extracted for all runs found in the structured data directory. The script utilizes the process_transient function to extract features for individual transients, and the main entry point, main(), orchestrates the feature extraction process for specified or all runs, saving the results as CSV files in the features data directory. The script handles parallel processing using Dask, and the logging system provides information about the extraction process and any encountered warnings or errors.
 
 ## Processing flow
 
@@ -31,9 +27,11 @@ graph TD
 A[Start] --> B[Download Data]
 B --> C[Verify Data]
 C --> D[Extract Data]
-D --> E[Feature Extraction]
-E --> F[Optional: Feature Selection]
-F --> G[End]
+D --> E[Structure Data (part 1)]
+E --> F[Structure Data (part 2)]
+F --> G[Feature Extraction]
+G --> H[Run Isolation Forest Model]
+H --> I[End]
 ```
 
 ## Using Dask
