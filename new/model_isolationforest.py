@@ -1,4 +1,6 @@
+import logging
 import os
+from random import randint
 from matplotlib import pyplot as plt
 import pandas as pd
 import argparse
@@ -6,6 +8,7 @@ import numpy as np
 import warnings
 import seaborn as sns
 from isotree import IsolationForest
+from multiprocessing import Pool
 
 from config import DATA_FEATURES_DIRECTORY
 
@@ -13,13 +16,63 @@ FEATURES = [
     "pretrig_std",
     "posttrig_exp_fit_R2",
     "posttrig_exp_fit_N",
-    "posttrig_exp_fit_λ",
-    "posttrig_std",
+    # "posttrig_exp_fit_λ",
+    # "posttrig_std",
 ]
 
-BLOCK_SIZE_X = 2500
-BLOCK_SIZE_Y = 2500
+BLOCK_SIZE_X = 1000
+BLOCK_SIZE_Y = 1000
 BLOCK_OVERLAP = 0
+
+
+def main():
+    # Initialise logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("model_isolationforest.log", mode="w"),
+            logging.StreamHandler(),
+        ],
+    )
+    logging.info("Starting Isolation Forest process...")
+
+    # Initialise argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run_number", type=int)
+    args = parser.parse_args()
+    run_number = args.run_number
+
+    # Combine labeled data with unlabeled extracted features
+    logging.debug("Reading features from csv")
+    df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+
+    # Segment dataframe into blocks and apply processing to each block
+    logging.info("Segmenting run into blocks")
+    blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
+    logging.info("Starting processing pipeline")
+    blocks_filtered = blocks.apply(processing_pipeline)
+
+    # Get transient ids of outliers and inliers
+    outliers, inliers = [], []
+    for block in blocks_filtered:
+        local_outliers, local_inliers = block
+        outliers.extend(local_outliers)
+        inliers.extend(local_inliers)
+
+    # Filter dataframe based on inliers-only
+    df_filtered = df[df["transient"].isin(inliers)]
+
+    # If all transients get rejected at one position, interpolate lost data from neighboring positions
+    # logging.info("Interpolating missing data points from neighbors")
+    # df_filtered = interpolate_lost_data(inliers, df_filtered, df)
+
+    print(df_filtered.sort_values(by="posttrig_exp_fit_N", ascending=False))
+    print(df_filtered.describe())
+
+    # Plot heatmap
+    logging.info("Plotting heatmap")
+    plot(df, df_filtered)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -133,7 +186,7 @@ def plot(df, df_filtered):
 def processing_pipeline(df):
     # Determine current block
     block_x, block_y = df["block_x"].iloc[0], df["block_y"].iloc[0]
-    print(f"Processing block_x: {block_x}, block_y: {block_y}")
+    logging.debug(f"Processing block_x: {block_x}, block_y: {block_y}")
 
     # Inject manual outliers to prevent no-outlier situation
     dfi = inject_points(df)
@@ -155,69 +208,60 @@ def processing_pipeline(df):
     return outliers, inliers
 
 
-def interpolate_lost_data(df, df_original):
+def interpolate_lost_data(inliers, df, df_original):
     # When all points on same position are rejected as outlier, no data is available
     # --> Interpolate lost data points from neighboring points
-    STEP_X = 495 * 1.5
-    STEP_Y = 495 * 1.5
-    number = 0
+    # TODO automatically calculate step size from run meta data
+    
     positions = df_original.groupby(["x_lsb", "y_lsb"])["transient"]
-    for position, group in positions:
-        x_lsb, y_lsb = position
-        transients = group.values
-        # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
-        if not any(transient in inliers for transient in transients):
-            select_neighbors = (
-                (df["x_lsb"] < x_lsb + STEP_X)
-                & (df["x_lsb"] > x_lsb - STEP_X)
-                & (df["y_lsb"] < y_lsb + STEP_Y)
-                & (df["y_lsb"] > y_lsb - STEP_Y)
-            )
 
-            neighbors = df[select_neighbors]
+    with Pool() as pool:
+        args = [(inliers, df, position, group) for (position, group) in positions]
+        points_list = pool.map(do_interpolate, args)
 
-            point = {
-                "transient": f"intr_{number:03d}",
-                "x_lsb": x_lsb,
-                "y_lsb": y_lsb,
-                "pretrig_std": neighbors["pretrig_std"].mean(),
-                "posttrig_std": neighbors["posttrig_std"].mean(),
-                "posttrig_exp_fit_N": neighbors["posttrig_exp_fit_N"].mean(),
-                "posttrig_exp_fit_λ": neighbors["posttrig_exp_fit_λ"].mean(),
-                "posttrig_exp_fit_c": neighbors["posttrig_exp_fit_c"].mean(),
-                "posttrig_exp_fit_R2": neighbors["posttrig_exp_fit_R2"].mean(),
-            }
-            number = number + 1
-            df = pd.concat([df, pd.DataFrame([point])], ignore_index=True)
+        df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
 
     return df
 
 
-# Initialise argument parser
-parser = argparse.ArgumentParser()
-parser.add_argument("run_number", type=int)
-args = parser.parse_args()
-run_number = args.run_number
+def do_interpolate(args):
+    (inliers, df, position, group) = args
+    
+    logging.debug(f"Interpolating {position}")
 
-# Combine labeled data with unlabeled extracted features
-df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+    STEP_X = 99 * 1.5
+    STEP_Y = 99 * 1.5
 
-# Segment dataframe into blocks and apply processing to each block
-blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
-blocks_filtered = blocks.apply(processing_pipeline)
+    x_lsb, y_lsb = position
+    transients = group.values
+    # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
+    if not any(transient in inliers for transient in transients):
+        select_neighbors = (
+            (df["x_lsb"] < x_lsb + STEP_X)
+            & (df["x_lsb"] > x_lsb - STEP_X)
+            & (df["y_lsb"] < y_lsb + STEP_Y)
+            & (df["y_lsb"] > y_lsb - STEP_Y)
+        )
 
-# Get transient ids of outliers and inliers
-outliers, inliers = [], []
-for block in blocks_filtered:
-    local_outliers, local_inliers = block
-    outliers.extend(local_outliers)
-    inliers.extend(local_inliers)
+        neighbors = df[select_neighbors]
 
-# Filter dataframe based on inliers-only
-df_filtered = df[df["transient"].isin(inliers)]
+        point = {
+            "transient": f"intr_{randint(0, 999999):03d}",
+            "x_lsb": x_lsb,
+            "y_lsb": y_lsb,
+            "pretrig_std": neighbors["pretrig_std"].mean(),
+            "posttrig_std": neighbors["posttrig_std"].mean(),
+            "posttrig_exp_fit_N": neighbors["posttrig_exp_fit_N"].mean(),
+            "posttrig_exp_fit_λ": neighbors["posttrig_exp_fit_λ"].mean(),
+            "posttrig_exp_fit_c": neighbors["posttrig_exp_fit_c"].mean(),
+            "posttrig_exp_fit_R2": neighbors["posttrig_exp_fit_R2"].mean(),
+        }
+        
+        return point
 
-# If all transients get rejected at one position, interpolate lost data from neighboring positions
-df_filtered = interpolate_lost_data(df_filtered, df)
 
-# Plot heatmap
-plot(df, df_filtered)
+if __name__ == "__main__":
+    try:
+        main()
+    except:
+        logging.exception("Fatal exception in main")

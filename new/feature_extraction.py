@@ -13,6 +13,7 @@ from config import (
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
     PRETRIG_GUARD_SAMPLES,
+    R2_THRESHOLD
 )
 from utils import require_processing_stage, moving_average, exponential_decay
 
@@ -80,6 +81,7 @@ def main():
                 features = pd.concat(features_list, ignore_index=True)
 
                 # Save extracted features to csv file
+                logging.debug(f"Storing extracted features in file run_{run_number:03d}.csv")
                 features.to_csv(
                     os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"),
                     index=False,
@@ -164,7 +166,7 @@ def process_transient(args):
                 tran_posttrig_time_ds,
                 tran_posttrig_freq_ds,
                 p0=initial_guess,
-                bounds=boundaries,
+                bounds=boundaries
             )
 
             # Caluculate coefficient of determination (R²)
@@ -172,16 +174,22 @@ def process_transient(args):
                 tran_posttrig_time_ds, *params
             )
             ss_res = np.sum(residuals**2)
-            ss_tot = np.sum(
-                (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
-            )
+            ss_tot = np.sum((tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2)
             r_squared = 1 - (ss_res / ss_tot)
-
-            # Assign fitted parameters and R² to resulting feature set
-            features["posttrig_exp_fit_N"] = params[0]
-            features["posttrig_exp_fit_λ"] = params[1]
-            features["posttrig_exp_fit_c"] = params[2]
+            
             features["posttrig_exp_fit_R2"] = r_squared
+
+            if r_squared > R2_THRESHOLD:
+                # Assign fitted parameters and R² to resulting feature set
+                features["posttrig_exp_fit_N"] = params[0]
+                features["posttrig_exp_fit_λ"] = params[1]
+                features["posttrig_exp_fit_c"] = params[2]
+            else:
+                # Insufficient fit, set parameters to zero
+                features["posttrig_exp_fit_N"] = 0
+                features["posttrig_exp_fit_λ"] = 0
+                features["posttrig_exp_fit_c"] = 0
+                params = None
 
         except:
             # If exponential fit fails, assign parameters to zero
