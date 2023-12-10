@@ -76,13 +76,16 @@ def main():
 
     # If runs are provided as arguments, only download the specified runs
     if len(args.run_numbers) > 0:
-        logging.info(f"Runs argument present, only extracting: {args.run_numbers}")
         run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
         tar_files = [
             tar_file
             for tar_file in tar_files
             if tar_file.split("/")[-1][:-4] in run_numbers
         ]
+        logging.info(f"Runs argument present, only extracting: {run_numbers}")
+    else:
+        run_numbers = [run["name"] for run in runs]
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     # Start extract each .tar file in parallel
     # TODO find way to gracefully kill downloading on sigterm

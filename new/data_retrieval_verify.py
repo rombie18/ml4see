@@ -77,12 +77,15 @@ def main():
 
     # If runs are provided as arguments, only verify the specified runs
     if len(args.run_numbers) > 0:
-        logging.info(f"Runs argument present, only verifying: {args.run_numbers}")
         run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
         runs = [run for run in runs if run["name"] in run_numbers]
+        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+    else:
+        run_numbers = [run["name"] for run in runs]
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
         
     # Start calculating md5sums in parallel
-    # TODO find way to gracefully kill downloading on sigterm
+    # TODO find way to gracefully kill downloading on sigterm -> replace with multiprocessing.Pool
     logging.info("Validating files")
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = [
@@ -167,8 +170,8 @@ def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
             f"Got {calculated_md5sum} as checksum but expected {expected_md5sum}."
         )
         # If the keep flag is not set, delete the file if verification fails
-        logging.info(f"Deleting file {file_name} since it is corrupt.")
         if not keep_on_fail:
+            logging.info(f"Deleting file {file_name} since it is corrupt.")
             os.remove(file_path)
         return
 

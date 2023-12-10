@@ -3,7 +3,10 @@ Create consolidated HDF5 file for a single run
 (script by Stefan)
 """
 
+# TODO revise entire file and optimize it
+
 import argparse
+import logging
 import os
 import pathlib
 import multiprocessing
@@ -15,7 +18,11 @@ import pandas as pd
 import numpy as np
 import scipy.signal as sps
 
-from config import DATA_RAW_DIRECTORY, DATA_RAW_GLASGOW_DIRECTORY, DATA_STRUCTURED_DIRECTORY
+from config import (
+    DATA_RAW_DIRECTORY,
+    DATA_RAW_GLASGOW_DIRECTORY,
+    DATA_STRUCTURED_DIRECTORY,
+)
 
 """
 HDF5 file processing of runs is to be done in stages.
@@ -75,6 +82,8 @@ SDR_ATTR_LIST = [
 
 
 """Various utility methods"""
+
+
 def chunker(seq, size):
     """Helper method for iterating over chunks of a list"""
     return (seq[pos : pos + size] for pos in range(0, len(seq), size))
@@ -262,19 +271,21 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('run_numbers', metavar='run_number', nargs='*', type=int)
+    parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
     parser.add_argument("--posttrig-samples", type=int)
     args = parser.parse_args()
 
+    # If runs are provided as arguments, only verify the specified runs
     run_numbers = []
-    if (len(args.run_numbers) == 0):
-        for dir in os.scandir(DATA_RAW_DIRECTORY):
-            if dir.is_dir():
-                if dir.path.split('/')[-1].startswith('run_'):
-                    run_numbers.append(int(dir.path.split('/')[-1][4:]))
-        print(f"No runs specified, running on all available runs: {run_numbers}")       
-    else:
+    if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
+        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+    else:
+        for item in os.listdir(DATA_RAW_DIRECTORY):
+            if item.is_dir():
+                if item.path.split("/")[-1].startswith("run_"):
+                    run_numbers.append(int(item.path.split("/")[-1][4:]))
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     for run_number in run_numbers:
         try:
@@ -284,9 +295,9 @@ def main():
             glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
 
             # get run information from logbook
-            logbook_data = pd.read_excel("logbook/mcb2022_logbook.xlsx", index_col=0).loc[
-                run_number
-            ]
+            logbook_data = pd.read_excel(
+                "logbook/mcb2022_logbook.xlsx", index_col=0
+            ).loc[run_number]
 
             pretrig_samples = logbook_data["sdr_info_len_pretrig"]
             posttrig_samples = logbook_data["sdr_info_len_posttrig"]
@@ -299,16 +310,20 @@ def main():
             glasgow_txt_log_path = os.path.join(run_folder_glasgow, "run_log.txt")
             glasgow_csv_log_path = os.path.join(run_folder_glasgow, "hit_log.csv")
 
-            assert os.path.exists(glasgow_txt_log_path), "Glasgow text log file not found"
-            assert os.path.exists(glasgow_txt_log_path), "Glasgow CSV log file not found"
-    
-            h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
+            assert os.path.exists(
+                glasgow_txt_log_path
+            ), "Glasgow text log file not found"
+            assert os.path.exists(
+                glasgow_txt_log_path
+            ), "Glasgow CSV log file not found"
+
+            h5_path = os.path.join(
+                DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5"
+            )
             with h5py.File(h5_path, "w") as h5file:
                 # add run metadata
                 print("Adding metadata...")
                 meta_ds = h5file.create_dataset("meta", dtype="f")
-                meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
-                meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
                 meta_ds.attrs.create("run_id", run_number)
                 create_log_attrs(
                     attr_list=META_STATIC_ATTR_LIST, node=meta_ds, logbook=logbook_data
@@ -316,11 +331,15 @@ def main():
 
                 if logbook_data["dut_type"] == "ADPLL":
                     create_log_attrs(
-                        attr_list=META_ADPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
+                        attr_list=META_ADPLL_ATTR_LIST,
+                        node=meta_ds,
+                        logbook=logbook_data,
                     )
                 if logbook_data["dut_type"] == "LJPLL":
                     create_log_attrs(
-                        attr_list=META_LJPLL_ATTR_LIST, node=meta_ds, logbook=logbook_data
+                        attr_list=META_LJPLL_ATTR_LIST,
+                        node=meta_ds,
+                        logbook=logbook_data,
                     )
 
                 # add FPGA text log
@@ -330,9 +349,13 @@ def main():
 
                 # add FPGA hit data
                 print("Adding FPGA hit log...")
-                fpga_hit_data = np.genfromtxt(glasgow_csv_log_path, delimiter=",", names=True)
+                fpga_hit_data = np.genfromtxt(
+                    glasgow_csv_log_path, delimiter=",", names=True
+                )
                 fpga_hit_data["hw_ts_10us"] /= 1e5
-                fpga_hit_data.dtype.names = ("hw_ts_sec",) + fpga_hit_data.dtype.names[1:]
+                fpga_hit_data.dtype.names = ("hw_ts_sec",) + fpga_hit_data.dtype.names[
+                    1:
+                ]
                 h5file.create_dataset("fpga_hit_data", data=fpga_hit_data)
 
                 # process SDR data if available for this run
@@ -344,14 +367,20 @@ def main():
                         attr_list=SDR_ATTR_LIST, node=sdr_group, logbook=logbook_data
                     )
                     sdr_group.attrs.create("sdr_info_len_pretrig", int(pretrig_samples))
-                    sdr_group.attrs.create("sdr_info_len_posttrig", int(posttrig_samples))
+                    sdr_group.attrs.create(
+                        "sdr_info_len_posttrig", int(posttrig_samples)
+                    )
                     run_folder_sdr = find_run_folder(sdr_data_folders, run_number)
                     create_sdr_datasets(
                         run_folder=run_folder_sdr,
                         node=sdr_group,
                         tran_length=int(pretrig_samples + posttrig_samples),
                     )
-                    
+
+                # Set processing stage at end of processing
+                meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
+                meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
+
                 print(f"** FINISHED RUN {run_number:03d} **")
         except:
             if h5_path and os.path.exists(h5_path):

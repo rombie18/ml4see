@@ -1,42 +1,11 @@
-"""
-feature_extraction.py
-
-This script extracts features from transients stored in HDF5 files and saves the results
-as CSV files. It supports parallel processing of transients using Dask and requires the
-`config` module for data directories and various parameters.
-
-Usage:
-    python feature_extraction.py [run_numbers ...]
-
-Parameters:
-    - run_numbers (int, optional): Specify one or more run numbers to extract features. If not provided,
-                                   features will be extracted for all runs found in the structured data directory.
-
-The script uses the `config` module for data directories and parameters, as well as the `utils` module for some utility functions.
-
-Functions:
-    - process_transient(h5_path, tran_name): Processes a single transient from an HDF5 file and returns a Pandas DataFrame
-                                             containing the extracted features.
-    - main(): The main entry point for the script, extracts features for all specified run numbers or all available runs.
-               Features are saved as CSV files in the features data directory.
-
-Note: This script requires the `config` and `utils` modules, and the `process_transient` function assumes the existence
-      and correctness of the `require_processing_stage`, `moving_average`, and `exponential_decay` functions.
-
-Example Usage:
-    python feature_extraction.py 1 2 3
-"""
-
 import os
 import logging
 import h5py
 import argparse
 import numpy as np
 import pandas as pd
-import dask
-import dask.dataframe as dd
-from dask.distributed import Client, LocalCluster
 from scipy.optimize import curve_fit
+from multiprocessing import Pool
 
 from config import (
     DATA_STRUCTURED_DIRECTORY,
@@ -48,10 +17,82 @@ from config import (
 from utils import require_processing_stage, moving_average, exponential_decay
 
 
-# TODO add beam position info to transient
+def main():
+    # Initialise logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("feature_extraction.log", mode="w"),
+            logging.StreamHandler(),
+        ],
+    )
+    logging.info("Starting feature extraction process...")
+
+    # Initialise argument parser
+    parser = argparse.ArgumentParser()
+    parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
+    args = parser.parse_args()
+
+    # Check if directories exist
+    if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
+        logging.error(
+            f"The structured data directory does not exist at {DATA_STRUCTURED_DIRECTORY}."
+        )
+        exit()
+    if not os.path.exists(DATA_FEATURES_DIRECTORY):
+        logging.error(
+            f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}."
+        )
+        exit()
+
+    # If runs are provided as arguments, only verify the specified runs
+    run_numbers = []
+    if len(args.run_numbers) > 0:
+        run_numbers = args.run_numbers
+        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+    else:
+        for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
+            if file.endswith(".h5"):
+                run_numbers.append(int(file[4:7]))
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
+
+    with Pool() as pool:
+        for run_number in run_numbers:
+            logging.info(f"Processing run {run_number:03d}")
+
+            # Combine data directory with provided run number to open .h5 file in read mode
+            h5_path = os.path.join(
+                DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5"
+            )
+            with h5py.File(h5_path, "r") as h5file:
+                # Check if file is up to required processing stage
+                require_processing_stage(h5file, 2, strict=True)
+
+                # Get transients from h5 file
+                transients = h5file["sdr_data"]["all"]
+
+                transient_args = [
+                    (h5_path, tran_name) for tran_name in transients.keys()
+                ]
+                features_list = pool.map(process_transient, transient_args)
+
+                features = pd.concat(features_list, ignore_index=True)
+
+                # Save extracted features to csv file
+                features.to_csv(
+                    os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"),
+                    index=False,
+                )
+
+            logging.info(f"Successfully processed run {run_number:03d}")
 
 
-def process_transient(h5_path, tran_name):
+def process_transient(args):
+    h5_path, tran_name = args
+
+    logging.debug(f"Processing transient {tran_name}")
+
     # TODO try to find way to speed up reading transients from disk
     with h5py.File(h5_path, "r") as h5file:
         # Get transient data from file
@@ -65,7 +106,6 @@ def process_transient(h5_path, tran_name):
         event_len = len_pretrig + len_posttrig - dsp_ntaps
 
         # Get additional transient meta data
-        # TODO subtract baseline variance from this transients to get a delta, use that as feature instead of pretrig std
         baseline_freq = transient.attrs["baseline_freq_mean_hz"]
         baseline_freq_std = transient.attrs["baseline_freq_std_hz"]
         x_lsb = transient.attrs["x_lsb"]
@@ -156,93 +196,8 @@ def process_transient(h5_path, tran_name):
         return df
 
 
-def main():
-    # Initialise logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(message)s",
-        handlers=[
-            logging.FileHandler("feature_extraction.log", mode="w"),
-            logging.StreamHandler(),
-        ],
-    )
-    logging.info("Starting feature extraction process...")
-
-    # Initialise argument parser
-    parser = argparse.ArgumentParser()
-    parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
-    args = parser.parse_args()
-
-    # Set Pandas options to increase readability
-    pd.set_option("display.float_format", lambda x: "%.9f" % x)
-    pd.options.display.max_rows = 1000
-
-    # Check if directories exist
-    if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
-        logging.error(
-            f"The structured data directory does not exist at {DATA_STRUCTURED_DIRECTORY}."
-        )
-        exit()
-    if not os.path.exists(DATA_FEATURES_DIRECTORY):
-        logging.error(
-            f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}."
-        )
-        exit()
-
-    run_numbers = []
-    if len(args.run_numbers) == 0:
-        for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
-            if file.endswith(".h5"):
-                run_numbers.append(int(file[4:7]))
-        print(f"No runs specified, running on all available runs: {run_numbers}")
-    else:
-        run_numbers = args.run_numbers
-
-    for run_number in run_numbers:
-        logging.info(f"Processing run {run_number:03d}")
-        # Combine data directory with provided run number to open .h5 file in read mode
-        h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
-        with h5py.File(h5_path, "r") as h5file:
-            # TODO when opening h5 check for various things such as below and move into unified file eg utils
-            # If run has no transients, skip
-            if "sdr_data" not in h5file:
-                logging.warning(
-                    f"Skipping run_{run_number:03d} since it has no transients (sdr_data)."
-                )
-                continue
-
-            # Check if file is up to required processing stage
-            require_processing_stage(h5file, 2, strict=True)
-
-            # Get transients from h5 file
-            transients = h5file["sdr_data"]["all"]
-
-            # Set up tasks to convert transients to Pandas dataframes
-            transient_tasks = []
-            for tran_name in transients.keys():
-                transient_tasks.append(
-                    dask.delayed(process_transient)(h5_path, tran_name)
-                )
-
-            # Set up task to merge all transients into single Dask dataframe
-            features_task = dd.from_delayed(transient_tasks)
-
-            # Execute above tasks
-            features: pd.DataFrame = features_task.compute()
-
-            # Save extracted features to csv file
-            features.to_csv(
-                os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"),
-                index=False,
-            )
-
-
 if __name__ == "__main__":
-    cluster = LocalCluster()
-    client = Client(cluster)
     try:
         main()
     except:
         logging.exception("Fatal exception in main")
-    finally:
-        client.close()

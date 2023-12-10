@@ -32,19 +32,26 @@ def chunker(seq, size):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
+    parser.add_argument(
+        "--override",
+        action="store_true",
+        help="Ignore required processing stage and sanity checks",
+    )
     args = parser.parse_args()
 
+    # If runs are provided as arguments, only verify the specified runs
     run_numbers = []
-    if len(args.run_numbers) == 0:
+    if len(args.run_numbers) > 0:
+        run_numbers = args.run_numbers
+        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+    else:
         for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
             if file.endswith(".h5"):
                 run_numbers.append(int(file[4:7]))
-        print(f"No runs specified, running on all available runs: {run_numbers}")
-    else:
-        run_numbers = args.run_numbers
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     for run_number in run_numbers:
-        print(f"** PROCESSING RUN {run_number:03d} **")
+        logging.info(f"** PROCESSING RUN {run_number:03d} **")
 
         h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
         with h5py.File(h5_path, "a") as h5file:
@@ -54,17 +61,24 @@ def main():
                 )
                 continue
 
-            try:
-                require_processing_stage(h5file, 1, strict=True)
-            except:
+            if not args.override:
+                required_processing_stage = 1
+                try:
+                    require_processing_stage(
+                        h5file, required_processing_stage, strict=True
+                    )
+                except:
+                    current_processing_stage = int(
+                        h5file["meta"].attrs["processing_stage"]
+                    )
+                    logging.warning(
+                        f"Skipping run_{run_number:03d} since it has an incorrect processing stage. Expected {required_processing_stage} and got {current_processing_stage}"
+                    )
+                    continue
+            else:
                 logging.warning(
-                    f"Skipping run_{run_number:03d} since it has an incorrect processing stage."
+                    f"Overriding required processing stage and sanity checks"
                 )
-                continue
-
-            meta_ds = h5file["meta"]
-            meta_ds.attrs.modify("processing_stage", META_PROCESSING_STAGE)
-            meta_ds.attrs.create("processing_stage_2_version", META_STAGE_2_VERSION)
 
             len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
             transients = h5file["sdr_data"]["all"]
@@ -113,6 +127,11 @@ def main():
                         tran_std / np.sqrt(len_pretrig - PRETRIG_GUARD_SAMPLES),
                     )
                     tran.attrs.create("baseline_freq_std_hz", tran_std)
+
+            # Modify processing stage
+            meta_ds = h5file["meta"]
+            meta_ds.attrs.modify("processing_stage", META_PROCESSING_STAGE)
+            meta_ds.attrs.create("processing_stage_2_version", META_STAGE_2_VERSION)
 
             print(f"** FINISHED RUN {run_number:03d} **")
 

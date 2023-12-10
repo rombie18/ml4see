@@ -71,6 +71,9 @@ def main():
         logging.info(f"Runs argument present, only downloading: {args.run_numbers}")
         run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
         runs = [run for run in runs if run["name"] in run_numbers]
+    else:
+        run_numbers = [run["name"] for run in runs]
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     # Start downloading the files in parallel
     # TODO find way to gracefully kill downloading on sigterm
