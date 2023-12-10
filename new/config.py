@@ -11,6 +11,12 @@ WINDOW_SIZE = 500
 # Downsampling factor from orginal data points to reduced
 DOWNSAMPLE_FACTOR = 250
 
+# Block sizes in µm to apply model on
+BLOCK_SIZE_X = 2
+BLOCK_SIZE_Y = 2
+# Overlap percentage (0-100) of blocks overlapping
+BLOCK_OVERLAP = 0
+
 # Paths to misc directories
 RUN_LOGBOOK_PATH = "/home/r0835817/2023-WoutRombouts/ml4see/new/logbook/mcb2022_logbook.xlsx"
 RUN_DUTPICS_DIRECTORY = "/home/r0835817/2023-WoutRombouts/ml4see/new/dut_position_pics"

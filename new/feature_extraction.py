@@ -101,6 +101,9 @@ def process_transient(args):
         transient = h5file["sdr_data"]["all"][tran_name]
 
         # Get run meta data
+        scan_x_lsb_per_um = h5file["meta"].attrs["scan_x_lsb_per_um"]
+        scan_y_lsb_per_um = h5file["meta"].attrs["scan_y_lsb_per_um"]
+        
         fs = h5file["sdr_data"].attrs["sdr_info_fs"]
         len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
@@ -140,6 +143,8 @@ def process_transient(args):
         features["transient"] = tran_name
         features["x_lsb"] = x_lsb
         features["y_lsb"] = y_lsb
+        features["x_um"] = x_lsb / scan_x_lsb_per_um
+        features["y_um"] = y_lsb / scan_y_lsb_per_um
         features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
         features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
 
