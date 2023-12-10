@@ -279,7 +279,7 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+        logging.info(f"Runs argument present, only structuring to stage 1: {run_numbers}")
     else:
         for item in os.listdir(DATA_RAW_DIRECTORY):
             if item.is_dir():

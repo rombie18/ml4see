@@ -51,7 +51,7 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(f"Runs argument present, only verifying: {run_numbers}")
+        logging.info(f"Runs argument present, only extracting features of: {run_numbers}")
     else:
         for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
             if file.endswith(".h5"):

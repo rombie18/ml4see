@@ -45,6 +45,7 @@ def main():
 
     # Segment dataframe into blocks and apply processing to each block
     logging.info("Segmenting run into blocks")
+    #TODO make block size dynamic based on run resolution
     blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
     logging.info("Starting processing pipeline")
     blocks_filtered = blocks.apply(processing_pipeline)
@@ -175,6 +176,34 @@ def plot(df, df_filtered):
     plt.savefig(f"plots/heatmap_v2.png", bbox_inches="tight")
     plt.close()
 
+def plot_2(df, df_filtered):
+    df_heatmap = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    )
+    heatmap_data_filtered = df_heatmap.pivot(
+        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
+    )
+
+    df_heatmap = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    heatmap_data = df_heatmap.pivot(
+        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
+    )
+
+    # Mark missing data with vibrant color
+    sns.set_style(rc={"axes.facecolor": "limegreen"})
+
+    fig, axs = plt.subplots(1, 2, figsize=(30, 20))
+    fig.tight_layout(pad=3.5, w_pad=10)
+    h1 = sns.heatmap(heatmap_data_filtered, ax=axs[0])
+    h2 = sns.heatmap(heatmap_data, ax=axs[1])
+    axs[0].set_title("Outliers filtered")
+    axs[1].set_title("No filtering")
+
+    # Use color scale from filtered plot
+    h2.collections[0].set_clim(h1.collections[0].get_clim())
+
+    plt.savefig(f"plots/heatmap_v2.png", bbox_inches="tight")
+    plt.close()
 
 def processing_pipeline(df):
     # Determine current block
@@ -214,8 +243,8 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
     y_values = np.unique(y_groups)
 
     # Calculate step size for x and y
-    step_x = np.diff(x_values)[0] if len(x_values) > 1 else 0
-    step_y = np.diff(y_values)[0] if len(y_values) > 1 else 0
+    step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
+    step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
 
     with Pool() as pool:
         args = [
@@ -223,7 +252,8 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
             for (position, group) in positions
         ]
         points_list = pool.map(do_interpolate, args)
-
+        points_list = [x for x in points_list if x is not None]
+        
         df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
 
     return df
@@ -239,16 +269,16 @@ def do_interpolate(args):
     # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
     if not any(transient in inliers for transient in transients):
         select_neighbors = (
-            (df["x_um"] < x_um + step_x)
-            & (df["x_um"] > x_um - step_x)
-            & (df["y_um"] < y_um + step_y)
-            & (df["y_um"] > y_um - step_y)
+            (df["x_um"] < x_um + step_x) & (df["x_um"] > x_um - step_x) &
+            (df["y_um"] < y_um + step_y) & (df["y_um"] > y_um - step_y)
         )
 
-        neighbors = df[select_neighbors]
-
+        neighbors = df.loc[select_neighbors]
+        
         point = {
             "transient": f"intr_{randint(0, 999999):03d}",
+            "x_lsb": None,
+            "y_lsb": None,
             "x_um": x_um,
             "y_um": y_um,
             "pretrig_std": neighbors["pretrig_std"].mean(),

@@ -1,8 +1,3 @@
-
-Certainly! Here's a docstring for the data_retrieval_extract Python script:
-
-python
-Copy code
 """
 data_retrieval_extract.py
 
