@@ -415,4 +415,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except:
+        logging.exception("Fatal exception in main")

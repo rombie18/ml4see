@@ -66,7 +66,7 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot_3(df, df_filtered)
+    plot(df, df_filtered)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -197,8 +197,12 @@ def plot_3(df, df_filtered):
    
 
     df_heatmap = (
-        df_filtered.groupby(["x_um"])["posttrig_exp_fit_N"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
+    
+    df_heatmap = df_heatmap[df_heatmap["y_um"] == 0]
+    
+    print(df_heatmap)
 
     plt.scatter(df_heatmap["x_um"], df_heatmap["posttrig_exp_fit_N"])
 

@@ -30,6 +30,18 @@ def chunker(seq, size):
 
 
 def main():
+    # Initialise logging
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("data_structuring_2.log", mode="w"),
+            logging.StreamHandler(),
+        ],
+    )
+    logging.info("Starting data structuring stage 2 process...")
+
+    # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
     parser.add_argument(
@@ -43,7 +55,9 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(f"Runs argument present, only structuring to stage 2: {run_numbers}")
+        logging.info(
+            f"Runs argument present, only structuring to stage 2: {run_numbers}"
+        )
     else:
         for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
             if file.endswith(".h5"):
@@ -135,6 +149,8 @@ def main():
 
             logging.info(f"** FINISHED RUN {run_number:03d} **")
 
-
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except:
+        logging.exception("Fatal exception in main")
