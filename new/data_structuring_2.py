@@ -83,7 +83,7 @@ def main():
             len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
             transients = h5file["sdr_data"]["all"]
 
-            print("Getting list of datasets in run...")
+            logging.debug("Getting list of datasets in run...")
             run_datasets = list(transients.keys())
             num_datasets = len(run_datasets)
             # choose a chunk size such that at least a few thousand events land in each chunk
@@ -98,7 +98,7 @@ def main():
                 raise "Last chunk will be too small..."
 
             for chunk_idx, chunk in enumerate(chunker(run_datasets, chunk_size)):
-                print(f"  Processing chunk {chunk_idx+1}/{math.ceil(num_chunks)}.")
+                logging.info(f"  Processing chunk {chunk_idx+1}/{math.ceil(num_chunks)}.")
 
                 tran_freq_means = []
                 tran_freq_stds = []
@@ -133,10 +133,7 @@ def main():
             meta_ds.attrs.modify("processing_stage", META_PROCESSING_STAGE)
             meta_ds.attrs.create("processing_stage_2_version", META_STAGE_2_VERSION)
 
-            print(f"** FINISHED RUN {run_number:03d} **")
-
-    print("Done.")
-    print()
+            logging.info(f"** FINISHED RUN {run_number:03d} **")
 
 
 if __name__ == "__main__":

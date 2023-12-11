@@ -12,8 +12,9 @@ WINDOW_SIZE = 500
 DOWNSAMPLE_FACTOR = 250
 
 # Block sizes in µm to apply model on
-BLOCK_SIZE_X = 20
-BLOCK_SIZE_Y = 20
+# E.g. 5µm for run_026, 20µm for run_014
+BLOCK_SIZE_X = 5
+BLOCK_SIZE_Y = 5
 # Overlap percentage (0-100) of blocks overlapping
 BLOCK_OVERLAP = 0
 

@@ -66,7 +66,7 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot(df, df_filtered)
+    plot_3(df, df_filtered)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -177,32 +177,32 @@ def plot(df, df_filtered):
     plt.close()
 
 def plot_2(df, df_filtered):
+    from matplotlib import cbook, cm
+    from matplotlib.colors import LightSource
+
     df_heatmap = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
-    heatmap_data_filtered = df_heatmap.pivot(
-        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
+
+    x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["posttrig_exp_fit_N"]
+    
+    # Set up plot
+    fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
+    surf = ax.plot_trisurf(x, y, z, linewidth=0, antialiased=False, cmap=cm.coolwarm)
+
+    plt.savefig(f"plots/heatmap_v3.png", bbox_inches="tight")
+    plt.close()
+    
+def plot_3(df, df_filtered):
+   
+
+    df_heatmap = (
+        df_filtered.groupby(["x_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
 
-    df_heatmap = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
-    heatmap_data = df_heatmap.pivot(
-        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
-    )
+    plt.scatter(df_heatmap["x_um"], df_heatmap["posttrig_exp_fit_N"])
 
-    # Mark missing data with vibrant color
-    sns.set_style(rc={"axes.facecolor": "limegreen"})
-
-    fig, axs = plt.subplots(1, 2, figsize=(30, 20))
-    fig.tight_layout(pad=3.5, w_pad=10)
-    h1 = sns.heatmap(heatmap_data_filtered, ax=axs[0])
-    h2 = sns.heatmap(heatmap_data, ax=axs[1])
-    axs[0].set_title("Outliers filtered")
-    axs[1].set_title("No filtering")
-
-    # Use color scale from filtered plot
-    h2.collections[0].set_clim(h1.collections[0].get_clim())
-
-    plt.savefig(f"plots/heatmap_v2.png", bbox_inches="tight")
+    plt.savefig(f"plots/heatmap_v4.png", bbox_inches="tight")
     plt.close()
 
 def processing_pipeline(df):
@@ -246,6 +246,7 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
     step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
     step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
 
+    #FIXME pool is not using all available resources
     with Pool() as pool:
         args = [
             (inliers, df, position, group, step_x, step_y)

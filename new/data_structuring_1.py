@@ -193,7 +193,7 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
     # relative filenames are of the form: x_000000/y_-00093/trig_019740.dat
     # to avoid costly regex matches, we just use their fixed length to parse out the important bits
     len_prefix = len(run_folder) + 1
-    print(f"  Getting list of files...")
+    logging.debug(f"  Getting list of files...")
     fnames = [str(fname) for fname in pathlib.Path(run_folder).rglob("*.dat")]
 
     file_dicts = [
@@ -216,60 +216,80 @@ def create_sdr_datasets(run_folder, node, tran_length=None, chunk_size=512):
     #  - parallel writes to the HDF datafile are not thread-safe
     #  - we only have finite amounts of RAM, so we can't process all transients before storing them
     for chunk_id, chunk in enumerate(chunker(file_dicts, chunk_size)):
-        print(f"  Processing chunk {chunk_id + 1}/{num_chunks}...")
+        logging.info(f"  Processing chunk {chunk_id + 1}/{num_chunks}...")
         # extract frequency information
         freqs = pool.map(dsp.file_to_freq, [entry["fname"] for entry in chunk])
         for tran_dict, freq in zip(chunk, freqs):
-            if tran_dict["x"] == 999999 or tran_dict["y"] == 999999:
-                continue
-            # recover timestamp information
-            with open(tran_dict["fname"], "rb") as tranfile:
-                ts_data = struct.unpack("<QQQ", tranfile.read(24))
-            sys_ts_sec = float(ts_data[1]) + float(ts_data[2]) / 1e6
-            hw_ts_sec = float(ts_data[0]) / sdr_fs
+            try:
+                if tran_dict["x"] == 999999 or tran_dict["y"] == 999999:
+                    continue
+                # recover timestamp information
+                with open(tran_dict["fname"], "rb") as tranfile:
+                    ts_data = struct.unpack("<QQQ", tranfile.read(24))
+                sys_ts_sec = float(ts_data[1]) + float(ts_data[2]) / 1e6
+                hw_ts_sec = float(ts_data[0]) / sdr_fs
 
-            # store everything to a dataset
-            tran_ds = all_group.create_dataset(f"tran_{tran_dict['id']:06d}", data=freq)
-            tran_ds.attrs.create("tran_num", tran_dict["id"])
-            tran_ds.attrs.create("x_lsb", tran_dict["x"])
-            tran_ds.attrs.create("y_lsb", tran_dict["y"])
-            tran_ds.attrs.create("hw_ts_sec", hw_ts_sec)
-            tran_ds.attrs.create("sys_ts_sec", sys_ts_sec)
-            tran_ds.attrs.create("dsp_info_pre_demod_bb_lo_freq_hz", sdr_fs / 4)
-            tran_ds.attrs.create("dataset_unit", "Hz")
+                # store everything to a dataset
+                tran_ds = all_group.create_dataset(
+                    f"tran_{tran_dict['id']:06d}", data=freq
+                )
+                tran_ds.attrs.create("tran_num", tran_dict["id"])
+                tran_ds.attrs.create("x_lsb", tran_dict["x"])
+                tran_ds.attrs.create("y_lsb", tran_dict["y"])
+                tran_ds.attrs.create("hw_ts_sec", hw_ts_sec)
+                tran_ds.attrs.create("sys_ts_sec", sys_ts_sec)
+                tran_ds.attrs.create("dsp_info_pre_demod_bb_lo_freq_hz", sdr_fs / 4)
+                tran_ds.attrs.create("dataset_unit", "Hz")
 
-            # append dataset to by-x hierarchy
-            by_x_x_group = by_x_group.require_group(f"x_{tran_dict['x']:06d}")
-            if "x_lsb" not in by_x_x_group.attrs:
-                by_x_x_group.attrs.create("x_lsb", tran_dict["x"])
-            by_x_y_group = by_x_x_group.require_group(f"y_{tran_dict['y']:06d}")
-            if "y_lsb" not in by_x_y_group.attrs:
-                by_x_y_group.attrs.create("y_lsb", tran_dict["y"])
-            by_x_y_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
+                # append dataset to by-x hierarchy
+                by_x_x_group = by_x_group.require_group(f"x_{tran_dict['x']:06d}")
+                if "x_lsb" not in by_x_x_group.attrs:
+                    by_x_x_group.attrs.create("x_lsb", tran_dict["x"])
+                by_x_y_group = by_x_x_group.require_group(f"y_{tran_dict['y']:06d}")
+                if "y_lsb" not in by_x_y_group.attrs:
+                    by_x_y_group.attrs.create("y_lsb", tran_dict["y"])
+                by_x_y_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
 
-            # append dataset to by-y hierarchy
-            by_y_y_group = by_y_group.require_group(f"y_{tran_dict['y']:06d}")
-            if "y_lsb" not in by_y_y_group.attrs:
-                by_y_y_group.attrs.create("y_lsb", tran_dict["y"])
-            by_y_x_group = by_y_y_group.require_group(f"x_{tran_dict['x']:06d}")
-            if "x_lsb" not in by_y_x_group.attrs:
-                by_y_x_group.attrs.create("x_lsb", tran_dict["x"])
-            by_y_x_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
+                # append dataset to by-y hierarchy
+                by_y_y_group = by_y_group.require_group(f"y_{tran_dict['y']:06d}")
+                if "y_lsb" not in by_y_y_group.attrs:
+                    by_y_y_group.attrs.create("y_lsb", tran_dict["y"])
+                by_y_x_group = by_y_y_group.require_group(f"x_{tran_dict['x']:06d}")
+                if "x_lsb" not in by_y_x_group.attrs:
+                    by_y_x_group.attrs.create("x_lsb", tran_dict["x"])
+                by_y_x_group[f"tran_{tran_dict['id']:06d}"] = tran_ds
+
+            except:
+                logging.warning(
+                    f"Failed to process tran_{tran_dict['id']:06d} due to error in raw run files. Skipping transient. Details: {tran_dict}"
+                )
 
         time_elapsed = time.time() - time_start
         time_per_chunk = time_elapsed / (chunk_id + 1)
         time_remaining = time_per_chunk * (num_chunks - chunk_id - 1)
-        print(
+        logging.info(
             f"  Time per chunk: {time_per_chunk:.02f} s; Remaining: {time_remaining:.02f} s"
         )
 
     tps = len(file_dicts) / time_elapsed
-    print(
+    logging.info(
         f"  Processing done. Elapsed time: {time_elapsed:.02f} s. Performance; {tps:.02f} files/s"
     )
 
 
 def main():
+    # Initialise logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(message)s",
+        handlers=[
+            logging.FileHandler("data_structuring_1.log", mode="w"),
+            logging.StreamHandler(),
+        ],
+    )
+    logging.info("Starting data structuring stage 1 process...")
+
+    # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
     parser.add_argument("--posttrig-samples", type=int)
@@ -279,7 +299,9 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(f"Runs argument present, only structuring to stage 1: {run_numbers}")
+        logging.info(
+            f"Runs argument present, only structuring to stage 1: {run_numbers}"
+        )
     else:
         for item in os.listdir(DATA_RAW_DIRECTORY):
             if item.is_dir():
@@ -289,7 +311,7 @@ def main():
 
     for run_number in run_numbers:
         try:
-            print(f"** PROCESSING RUN {run_number:03d} **")
+            logging.info(f"** PROCESSING RUN {run_number:03d} **")
 
             sdr_data_folders = DATA_RAW_DIRECTORY.split(":")
             glasgow_data_folders = DATA_RAW_GLASGOW_DIRECTORY.split(":")
@@ -304,7 +326,9 @@ def main():
             if args.posttrig_samples is not None:
                 assert posttrig_samples >= args.posttrig_samples
                 posttrig_samples = args.posttrig_samples
-                print(f"Cropping SDR data to {posttrig_samples} post-trigger samples")
+                logging.info(
+                    f"Cropping SDR data to {posttrig_samples} post-trigger samples"
+                )
 
             run_folder_glasgow = find_run_folder(glasgow_data_folders, run_number)
             glasgow_txt_log_path = os.path.join(run_folder_glasgow, "run_log.txt")
@@ -322,7 +346,7 @@ def main():
             )
             with h5py.File(h5_path, "w") as h5file:
                 # add run metadata
-                print("Adding metadata...")
+                logging.debug("Adding metadata...")
                 meta_ds = h5file.create_dataset("meta", dtype="f")
                 meta_ds.attrs.create("run_id", run_number)
                 create_log_attrs(
@@ -343,12 +367,12 @@ def main():
                     )
 
                 # add FPGA text log
-                print("Adding FPGA log text file...")
+                logging.debug("Adding FPGA log text file...")
                 with open(glasgow_txt_log_path, "r") as glasgow_log:
                     h5file.create_dataset("fpga_log", data=glasgow_log.read())
 
                 # add FPGA hit data
-                print("Adding FPGA hit log...")
+                logging.debug("Adding FPGA hit log...")
                 fpga_hit_data = np.genfromtxt(
                     glasgow_csv_log_path, delimiter=",", names=True
                 )
@@ -360,7 +384,9 @@ def main():
 
                 # process SDR data if available for this run
                 if logbook_data["sdr_data"]:
-                    print("SDR data available for this run - processing SDR data.")
+                    logging.debug(
+                        "SDR data available for this run - processing SDR data."
+                    )
                     sdr_group = h5file.create_group("sdr_data")
                     # add SDR-related metadata
                     create_log_attrs(
@@ -381,14 +407,11 @@ def main():
                 meta_ds.attrs.create("processing_stage", META_PROCESSING_STAGE)
                 meta_ds.attrs.create("processing_stage_1_version", META_STAGE_1_VERSION)
 
-                print(f"** FINISHED RUN {run_number:03d} **")
+                logging.info(f"** FINISHED RUN {run_number:03d} **")
         except:
             if h5_path and os.path.exists(h5_path):
                 os.remove(h5_path)
-            print(f"** RUN {run_number:03d} FAILED")
-
-    print("Done.")
-    print()
+            logging.exception(f"** RUN {run_number:03d} FAILED")
 
 
 if __name__ == "__main__":
