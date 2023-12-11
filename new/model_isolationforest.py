@@ -66,7 +66,7 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot(df, df_filtered)
+    plot_4(df, df_filtered)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -173,7 +173,7 @@ def plot(df, df_filtered):
     # Use color scale from filtered plot
     h2.collections[0].set_clim(h1.collections[0].get_clim())
 
-    plt.savefig(f"plots/heatmap_v2.png", bbox_inches="tight")
+    plt.savefig(f"plots/heatmap_1.png", bbox_inches="tight")
     plt.close()
 
 def plot_2(df, df_filtered):
@@ -190,7 +190,7 @@ def plot_2(df, df_filtered):
     fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
     surf = ax.plot_trisurf(x, y, z, linewidth=0, antialiased=False, cmap=cm.coolwarm)
 
-    plt.savefig(f"plots/heatmap_v3.png", bbox_inches="tight")
+    plt.savefig(f"plots/heatmap_2.png", bbox_inches="tight")
     plt.close()
     
 def plot_3(df, df_filtered):
@@ -202,11 +202,32 @@ def plot_3(df, df_filtered):
     
     df_heatmap = df_heatmap[df_heatmap["y_um"] == 0]
     
-    print(df_heatmap)
-
     plt.scatter(df_heatmap["x_um"], df_heatmap["posttrig_exp_fit_N"])
 
-    plt.savefig(f"plots/heatmap_v4.png", bbox_inches="tight")
+    plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
+    plt.close()
+    
+def plot_4(df, df_filtered):
+   
+
+    df_filtered = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    )
+    
+    df = (
+        df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    )
+    
+    fig, axs = plt.subplots(1, 2)
+    
+    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker='.')
+    axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker='.')
+
+    axs[0].set_title("Outliers filtered")
+    axs[1].set_title("No filtering")
+    
+
+    plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
     plt.close()
 
 def processing_pipeline(df):
