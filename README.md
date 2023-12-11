@@ -17,9 +17,11 @@ The "data_retrieval_verify.py" script verifies file integrity by comparing calcu
 The "data_retrieval_extract.py" script facilitates the parallel extraction of downloaded tar files, employing multiple processes for efficiency. Users can specify run numbers as command-line arguments to extract specific runs. The script utilizes the config module for data download and raw data directories. Key functions include main(), responsible for initializing the process, parsing arguments, and orchestrating the extraction; parallel_untar(), which extracts a tar file in parallel using multiple processes; and untar_chunk(), which extracts a chunk of a tar file. The script supports interruption handling and concurrent extraction using process pools.
 
 `data_structuring_1.py`
+
 The "data_structuring_1.py" script is designed to create consolidated HDF5 files for individual runs, with a primary focus on processing Software-Defined Radio (SDR) data. The script utilizes metadata attributes from a logbook, handles different types of runs (ADPLL and LJPLL) accordingly, and incorporates FPGA log and hit data into the HDF5 file. For runs with SDR data, the script processes it using the SDREventProcessor class, creating datasets and organizing them within the HDF5 file. The script supports command-line arguments for specifying run numbers and post-trigger sample counts. It employs logging for informative and error messages and includes exception handling to address potential errors during the processing. The overall design emphasizes modularity and parallel processing for efficient data structuring.
 
 `data_structuring_2.py`
+
 The "data_structuring_2.py" script represents the second stage of data processing, focusing on annotating baseline data for runs containing Software-Defined Radio (SDR) transients. The script utilizes metadata attributes, including the processing stage and version information. It defines a utility method for chunking datasets and calculates baseline statistics, such as mean, standard deviation, and standard deviation of the mean, for SDR transients in chunks. The script annotates the corresponding HDF5 files with these statistics and updates processing stage and version attributes. The main function parses command-line arguments, determines the runs to process, and performs the specified tasks. 
 
 `feature_extraction.py`
