@@ -116,11 +116,11 @@ def process_transient(args):
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
 
-        # Construct time and frequency arrays, subtract mean baseline frequency from each sample to get delta frequency
+        # Construct time and frequency arrays, calculate the frequency error in ppm
         tran_time = (
             np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         )
-        tran_freq = np.subtract(np.array(transient), baseline_freq)
+        tran_freq = np.subtract(np.array(transient), baseline_freq) / baseline_freq * 1e6
 
         # Construct pre-trigger baseline arrays
         tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]

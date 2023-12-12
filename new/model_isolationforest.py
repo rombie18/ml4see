@@ -9,6 +9,7 @@ import warnings
 import seaborn as sns
 from isotree import IsolationForest
 from multiprocessing import Pool
+from matplotlib.ticker import StrMethodFormatter
 
 from config import DATA_FEATURES_DIRECTORY, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP
 
@@ -45,7 +46,7 @@ def main():
 
     # Segment dataframe into blocks and apply processing to each block
     logging.info("Segmenting run into blocks")
-    #TODO make block size dynamic based on run resolution
+    # TODO make block size dynamic based on run resolution
     blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
     logging.info("Starting processing pipeline")
     blocks_filtered = blocks.apply(processing_pipeline)
@@ -66,7 +67,7 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot_4(df, df_filtered)
+    plot_2(df, df_filtered, run_number)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -147,88 +148,113 @@ def isolation_forest(df: pd.DataFrame):
     return y_pred
 
 
-def plot(df, df_filtered):
-    df_heatmap = (
+def plot(df, df_filtered, run_number):
+    df_filtered_grouped = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
-    heatmap_data_filtered = df_heatmap.pivot(
+    heatmap_filtered = df_filtered_grouped.pivot(
         index="x_um", columns="y_um", values="posttrig_exp_fit_N"
-    )
+    ).transpose()
 
-    df_heatmap = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
-    heatmap_data = df_heatmap.pivot(
+    df_grouped = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    heatmap = df_grouped.pivot(
         index="x_um", columns="y_um", values="posttrig_exp_fit_N"
-    )
+    ).transpose()
 
     # Mark missing data with vibrant color
     sns.set_style(rc={"axes.facecolor": "limegreen"})
 
-    fig, axs = plt.subplots(1, 2, figsize=(30, 20))
-    fig.tight_layout(pad=3.5, w_pad=10)
-    h1 = sns.heatmap(heatmap_data_filtered, ax=axs[0])
-    h2 = sns.heatmap(heatmap_data, ax=axs[1])
-    axs[0].set_title("Outliers filtered")
-    axs[1].set_title("No filtering")
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+    fig.tight_layout(w_pad=15)
 
-    # Use color scale from filtered plot
+    h1 = sns.heatmap(
+        heatmap_filtered,
+        square=True,
+        cbar_kws={"label": "Frequency deviation (Hz)", "fraction": 0.046, "pad": 0.04},
+        cmap="jet",
+        ax=axs[0],
+    )
+    h2 = sns.heatmap(
+        heatmap,
+        square=True,
+        cbar_kws={"label": "Frequency deviation (Hz)", "fraction": 0.046, "pad": 0.04},
+        cmap="jet",
+        ax=axs[1],
+    )
+
+    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_xlabel("Beam position X (µm)")
+    axs[0].set_ylabel("Beam position Y (µm)")
+    axs[0].set_xticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_xticklabels()]
+    )
+    axs[0].set_yticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_yticklabels()]
+    )
+
+    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_xlabel("Beam position X (µm)")
+    axs[1].set_ylabel("Beam position Y (µm)")
+    axs[1].set_xticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_xticklabels()]
+    )
+    axs[1].set_yticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_yticklabels()]
+    )
+
+    # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h2.collections[0].set_clim(h1.collections[0].get_clim())
 
     plt.savefig(f"plots/heatmap_1.png", bbox_inches="tight")
     plt.close()
 
-def plot_2(df, df_filtered):
-    from matplotlib import cbook, cm
-    from matplotlib.colors import LightSource
 
+def plot_2(df, df_filtered, run_number):
     df_heatmap = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
 
     x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["posttrig_exp_fit_N"]
-    
+
     # Set up plot
-    fig, ax = plt.subplots(subplot_kw=dict(projection='3d'))
-    surf = ax.plot_trisurf(x, y, z, linewidth=0, antialiased=False, cmap=cm.coolwarm)
+    fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
+    surf = ax.plot_trisurf(x, y, z, linewidth=0, antialiased=False, cmap="jet")
 
     plt.savefig(f"plots/heatmap_2.png", bbox_inches="tight")
     plt.close()
-    
-def plot_3(df, df_filtered):
-   
 
+
+def plot_3(df, df_filtered, run_number):
     df_heatmap = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
-    
+
     df_heatmap = df_heatmap[df_heatmap["y_um"] == 0]
-    
+
     plt.scatter(df_heatmap["x_um"], df_heatmap["posttrig_exp_fit_N"])
 
     plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
     plt.close()
-    
-def plot_4(df, df_filtered):
-   
 
+
+def plot_4(df, df_filtered, run_number):
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
-    
-    df = (
-        df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
-    )
-    
+
+    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+
     fig, axs = plt.subplots(1, 2)
-    
-    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker='.')
-    axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker='.')
+
+    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker=".")
 
     axs[0].set_title("Outliers filtered")
     axs[1].set_title("No filtering")
-    
 
     plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
     plt.close()
+
 
 def processing_pipeline(df):
     # Determine current block
@@ -271,7 +297,7 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
     step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
     step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
 
-    #FIXME pool is not using all available resources
+    # FIXME pool is not using all available resources
     with Pool() as pool:
         args = [
             (inliers, df, position, group, step_x, step_y)
@@ -279,7 +305,7 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
         ]
         points_list = pool.map(do_interpolate, args)
         points_list = [x for x in points_list if x is not None]
-        
+
         df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
 
     return df
@@ -295,12 +321,14 @@ def do_interpolate(args):
     # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
     if not any(transient in inliers for transient in transients):
         select_neighbors = (
-            (df["x_um"] < x_um + step_x) & (df["x_um"] > x_um - step_x) &
-            (df["y_um"] < y_um + step_y) & (df["y_um"] > y_um - step_y)
+            (df["x_um"] < x_um + step_x)
+            & (df["x_um"] > x_um - step_x)
+            & (df["y_um"] < y_um + step_y)
+            & (df["y_um"] > y_um - step_y)
         )
 
         neighbors = df.loc[select_neighbors]
-        
+
         point = {
             "transient": f"intr_{randint(0, 999999):03d}",
             "x_lsb": None,

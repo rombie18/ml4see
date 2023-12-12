@@ -45,7 +45,8 @@ with h5py.File(h5_path, "r") as h5file:
 
     # Construct time and frequency arrays
     tran_time = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-    tran_freq = np.subtract(np.array(transient), baseline_freq)
+    tran_freq = np.subtract(np.array(transient), baseline_freq) / 2.5e9 * 1e6
+    # tran_freq = np.array(transient)
 
     # Construct pre-trigger baseline arrays
     tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
@@ -154,7 +155,7 @@ with h5py.File(h5_path, "r") as h5file:
     axis.set_title(f"Moving Average ({tran_name})")
 
     min = np.min(tran_freq_ds)
-    min = min * 1.1
+    min = min * 0.9
     max = np.max(tran_freq_ds)
     max = max * 1.1
     axis.set_ylim(min, max)
