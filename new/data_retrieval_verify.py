@@ -30,14 +30,13 @@ Example Usage:
 
 import csv
 import os
-import json
 import logging
-import subprocess
 import argparse
-import concurrent.futures
 import hashlib
+from multiprocessing import Pool
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
+
 
 def main():
     # Initialise logging
@@ -83,31 +82,28 @@ def main():
     else:
         run_numbers = [run["name"] for run in runs]
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
-        
+
     # Start calculating md5sums in parallel
-    # TODO find way to gracefully kill downloading on sigterm -> replace with multiprocessing.Pool
     logging.info("Validating files")
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = [
-            executor.submit(
-                validate_file,
+    with Pool() as pool:
+        args = [
+            (
                 DATA_DOWNLOAD_DIRECTORY,
                 run["url"].split("/")[-1],
                 run["md5sum"],
-                keep_on_fail=args.keep
+                args.keep,
             )
             for run in runs
         ]
+        pool.map(validate_file_args, args)
 
-        # TODO find way to hide tracebacks and junk output on keyboard interrupt
-        try:
-            concurrent.futures.wait(futures)
-        except KeyboardInterrupt:
-            logging.warning("Ctrl+C pressed. Trying to cancel remaining tasks...")
-            for future in futures:
-                future.cancel()
-            exit()
-            
+    logging.info("Done!")
+
+
+def validate_file_args(args):
+    working_dir, file_name, expected_md5sum, keep_on_fail = args
+    validate_file(working_dir, file_name, expected_md5sum, keep_on_fail)
+
 
 def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
     """
@@ -141,17 +137,15 @@ def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
     ```
 
     """
-    
+
     logging.info(f"Validating {file_name}")
-    
+
     # Compose full path where to save the downloaded run
     file_path = os.path.join(working_dir, file_name)
-        
+
     # If run is not found on disk or has no md5sum available, skip
     if not os.path.exists(file_path):
-        logging.warning(
-            f"Skip validating {file_name} since it was not found on disk!"
-        )
+        logging.warning(f"Skip validating {file_name} since it was not found on disk!")
         return
 
     if expected_md5sum == "":
@@ -159,10 +153,10 @@ def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
             f"Skip validating {file_name} since it has no md5 checksum available!"
         )
         return
-            
+
     # Calculate md5sum of file
     calculated_md5sum = calculate_md5(file_path)
-            
+
     # Check if calculated md5sum matches the provided one in the data summary file
     if not calculated_md5sum == expected_md5sum:
         logging.error(f"Validation of {file_name} failed!")
@@ -176,7 +170,7 @@ def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):
         return
 
     logging.info(f"Validation of {file_name} succeeded.")
-    
+
 
 def calculate_md5(file_path, buffer_size=32768):
     """
@@ -189,8 +183,10 @@ def calculate_md5(file_path, buffer_size=32768):
     Returns:
     - md5_checksum (str): The MD5 checksum of the file.
     """
-    
-    logging.debug(f"Calculating md5sum of {file_path} with buffer size of {buffer_size}")
+
+    logging.debug(
+        f"Calculating md5sum of {file_path} with buffer size of {buffer_size}"
+    )
 
     # Create an MD5 hash object
     md5_hash = hashlib.md5()

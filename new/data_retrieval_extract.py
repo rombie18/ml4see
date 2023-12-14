@@ -30,7 +30,7 @@ import os
 import logging
 import tarfile
 import argparse
-import concurrent.futures
+from multiprocessing import Pool
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_RAW_DIRECTORY
 
@@ -71,19 +71,19 @@ def main():
 
     # If runs are provided as arguments, only download the specified runs
     if len(args.run_numbers) > 0:
-        run_numbers = [f"run_{run_number:03d}" for run_number in args.run_numbers]
+        run_names = [f"run_{run_number:03d}" for run_number in args.run_numbers]
+        run_numbers = args.run_numbers
         tar_files = [
             tar_file
             for tar_file in tar_files
-            if tar_file.split("/")[-1][:-4] in run_numbers
+            if tar_file.split("/")[-1][:-4] in run_names
         ]
         logging.info(f"Runs argument present, only extracting: {run_numbers}")
     else:
-        run_numbers = [run["name"] for run in runs]
+        run_numbers = [int(tar_file.split("/")[-1][4:-4]) for tar_file in tar_files]
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     # Start extract each .tar file in parallel
-    # TODO find way to gracefully kill downloading on sigterm
     logging.info("Starting .tar extraction")
     for tar_file in tar_files:
         parallel_untar(tar_file, DATA_RAW_DIRECTORY)
@@ -111,31 +111,22 @@ def parallel_untar(tar_file, output_dir):
         logging.info(
             f"Extracting {file_name} in {num_threads} chunks of size {chunk_size}"
         )
-        with concurrent.futures.ProcessPoolExecutor() as executor:
-            futures = []
+
+        with Pool() as pool:
+            args = []
             for i in range(num_threads):
                 chunk_start = i * chunk_size
                 chunk_end = (i + 1) * chunk_size if i != num_threads - 1 else None
-                future = executor.submit(
-                    untar_chunk,
-                    tar_file,
-                    tar_members,
-                    output_dir,
-                    chunk_start,
-                    chunk_end,
-                )
-                futures.append(future)
+                args.append((tar_file, tar_members, output_dir, chunk_start, chunk_end))
 
-            # TODO find way to hide tracebacks and junk output on keyboard interrupt
-            try:
-                concurrent.futures.wait(futures)
-            except KeyboardInterrupt:
-                logging.warning("Ctrl+C pressed. Trying to cancel remaining tasks...")
-                for future in futures:
-                    future.cancel()
-                exit()
+            pool.map(untar_chunk_args, args)
 
     logging.info(f"Successfully extracted {file_name}")
+
+
+def untar_chunk_args(args):
+    tar_file, tar_members, output_dir, chunk_start, chunk_end = args
+    untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end)
 
 
 def untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end):

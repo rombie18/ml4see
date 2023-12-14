@@ -13,7 +13,7 @@ from config import (
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
     PRETRIG_GUARD_SAMPLES,
-    R2_THRESHOLD
+    R2_THRESHOLD,
 )
 from utils import require_processing_stage, moving_average, exponential_decay
 
@@ -51,7 +51,9 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(f"Runs argument present, only extracting features of: {run_numbers}")
+        logging.info(
+            f"Runs argument present, only extracting features of: {run_numbers}"
+        )
     else:
         for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
             if file.endswith(".h5"):
@@ -76,12 +78,14 @@ def main():
                 transient_args = [
                     (h5_path, tran_name) for tran_name in transients.keys()
                 ]
-                features_list = pool.map(process_transient, transient_args)
+                features_list = pool.map(process_transient_args, transient_args)
 
                 features = pd.concat(features_list, ignore_index=True)
 
                 # Save extracted features to csv file
-                logging.debug(f"Storing extracted features in file run_{run_number:03d}.csv")
+                logging.debug(
+                    f"Storing extracted features in file run_{run_number:03d}.csv"
+                )
                 features.to_csv(
                     os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"),
                     index=False,
@@ -90,9 +94,12 @@ def main():
             logging.info(f"Successfully processed run {run_number:03d}")
 
 
-def process_transient(args):
+def process_transient_args(args):
     h5_path, tran_name = args
+    process_transient(h5_path, tran_name)
 
+
+def process_transient(h5_path, tran_name):
     logging.debug(f"Processing transient {tran_name}")
 
     # TODO try to find way to speed up reading transients from disk
@@ -103,7 +110,7 @@ def process_transient(args):
         # Get run meta data
         scan_x_lsb_per_um = h5file["meta"].attrs["scan_x_lsb_per_um"]
         scan_y_lsb_per_um = h5file["meta"].attrs["scan_y_lsb_per_um"]
-        
+
         fs = h5file["sdr_data"].attrs["sdr_info_fs"]
         len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
@@ -120,7 +127,9 @@ def process_transient(args):
         tran_time = (
             np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         )
-        tran_freq = np.subtract(np.array(transient), baseline_freq) / baseline_freq * 1e6
+        tran_freq = (
+            np.subtract(np.array(transient), baseline_freq) / baseline_freq * 1e6
+        )
 
         # Construct pre-trigger baseline arrays
         tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
@@ -171,7 +180,7 @@ def process_transient(args):
                 tran_posttrig_time_ds,
                 tran_posttrig_freq_ds,
                 p0=initial_guess,
-                bounds=boundaries
+                bounds=boundaries,
             )
 
             # Caluculate coefficient of determination (R²)
@@ -179,9 +188,11 @@ def process_transient(args):
                 tran_posttrig_time_ds, *params
             )
             ss_res = np.sum(residuals**2)
-            ss_tot = np.sum((tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2)
+            ss_tot = np.sum(
+                (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
+            )
             r_squared = 1 - (ss_res / ss_tot)
-            
+
             features["posttrig_exp_fit_R2"] = r_squared
 
             if r_squared > R2_THRESHOLD:

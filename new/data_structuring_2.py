@@ -3,6 +3,8 @@ Processing stage 2: annotate baseline data
 (script by Stefan)
 """
 
+# TODO revise entire file and optimize it
+
 import argparse
 import logging
 import math
@@ -112,7 +114,9 @@ def main():
                 raise "Last chunk will be too small..."
 
             for chunk_idx, chunk in enumerate(chunker(run_datasets, chunk_size)):
-                logging.info(f"  Processing chunk {chunk_idx+1}/{math.ceil(num_chunks)}.")
+                logging.info(
+                    f"  Processing chunk {chunk_idx+1}/{math.ceil(num_chunks)}."
+                )
 
                 tran_freq_means = []
                 tran_freq_stds = []
@@ -148,6 +152,7 @@ def main():
             meta_ds.attrs.create("processing_stage_2_version", META_STAGE_2_VERSION)
 
             logging.info(f"** FINISHED RUN {run_number:03d} **")
+
 
 if __name__ == "__main__":
     try:

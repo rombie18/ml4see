@@ -67,7 +67,7 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot_2(df, df_filtered, run_number)
+    plot(df, df_filtered, run_number)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -191,6 +191,7 @@ def plot(df, df_filtered, run_number):
     axs[0].set_yticklabels(
         ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_yticklabels()]
     )
+    axs[0].invert_yaxis()
 
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
     axs[1].set_xlabel("Beam position X (µm)")
@@ -201,6 +202,7 @@ def plot(df, df_filtered, run_number):
     axs[1].set_yticklabels(
         ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_yticklabels()]
     )
+    axs[1].invert_yaxis()
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h2.collections[0].set_clim(h1.collections[0].get_clim())
@@ -281,7 +283,7 @@ def processing_pipeline(df):
     return outliers, inliers
 
 
-def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
+def interpolate_lost_data(inliers, df, df_original):
     # When all points on same position are rejected as outlier, no data is available
     # --> Interpolate lost data points from neighboring points
 
@@ -297,13 +299,13 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
     step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
     step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
 
-    # FIXME pool is not using all available resources
+    # Interpolate missing data from neighbors in parallel
     with Pool() as pool:
         args = [
             (inliers, df, position, group, step_x, step_y)
             for (position, group) in positions
         ]
-        points_list = pool.map(do_interpolate, args)
+        points_list = pool.map(do_interpolate_args, args)
         points_list = [x for x in points_list if x is not None]
 
         df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
@@ -311,9 +313,11 @@ def interpolate_lost_data(inliers, df, df_original: pd.DataFrame):
     return df
 
 
-def do_interpolate(args):
-    (inliers, df, position, group, step_x, step_y) = args
+def do_interpolate_args(args):
+    inliers, df, position, group, step_x, step_y = args
+    do_interpolate(inliers, df, position, group, step_x, step_y)
 
+def do_interpolate(inliers, df, position, group, step_x, step_y):
     logging.debug(f"Interpolating {position}")
 
     x_um, y_um = position

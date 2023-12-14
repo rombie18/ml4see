@@ -30,8 +30,8 @@ import csv
 import os
 import logging
 import argparse
-import concurrent.futures
 import requests
+from multiprocessing import Pool
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH, DOWNLOAD_ATTEMPTS
 
@@ -76,28 +76,20 @@ def main():
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     # Start downloading the files in parallel
-    # TODO find way to gracefully kill downloading on sigterm
     logging.info("Starting file downloads")
-    with concurrent.futures.ProcessPoolExecutor() as executor:
-        futures = [
-            executor.submit(
-                download_file,
-                run["url"],
-                DATA_DOWNLOAD_DIRECTORY,
-                run["url"].split("/")[-1],
-                attempts=DOWNLOAD_ATTEMPTS,
-            )
+    with Pool() as pool:
+        args = [
+            (run["url"], DATA_DOWNLOAD_DIRECTORY, run["url"].split("/")[-1])
             for run in runs
         ]
+        pool.map(download_file_args, args)
 
-        # TODO find way to hide tracebacks and junk output on keyboard interrupt
-        try:
-            concurrent.futures.wait(futures)
-        except KeyboardInterrupt:
-            logging.warning("Ctrl+C pressed. Trying to cancel remaining tasks...")
-            for future in futures:
-                future.cancel()
-            exit()
+    logging.info("Done!")
+
+
+def download_file_args(args):
+    url, working_dir, file_name = args
+    download_file(url, working_dir, file_name, attempts=DOWNLOAD_ATTEMPTS)
 
 
 def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):
