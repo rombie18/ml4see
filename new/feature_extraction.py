@@ -96,7 +96,7 @@ def main():
 
 def process_transient_args(args):
     h5_path, tran_name = args
-    process_transient(h5_path, tran_name)
+    return process_transient(h5_path, tran_name)
 
 
 def process_transient(h5_path, tran_name):

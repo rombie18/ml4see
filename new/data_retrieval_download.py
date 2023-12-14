@@ -89,7 +89,7 @@ def main():
 
 def download_file_args(args):
     url, working_dir, file_name = args
-    download_file(url, working_dir, file_name, attempts=DOWNLOAD_ATTEMPTS)
+    return download_file(url, working_dir, file_name, attempts=DOWNLOAD_ATTEMPTS)
 
 
 def download_file(url, working_dir, file_name, attempts=5, chunk_size=1024):

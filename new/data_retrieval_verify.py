@@ -102,7 +102,7 @@ def main():
 
 def validate_file_args(args):
     working_dir, file_name, expected_md5sum, keep_on_fail = args
-    validate_file(working_dir, file_name, expected_md5sum, keep_on_fail)
+    return validate_file(working_dir, file_name, expected_md5sum, keep_on_fail)
 
 
 def validate_file(working_dir, file_name, expected_md5sum, keep_on_fail=True):

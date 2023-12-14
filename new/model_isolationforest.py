@@ -315,7 +315,7 @@ def interpolate_lost_data(inliers, df, df_original):
 
 def do_interpolate_args(args):
     inliers, df, position, group, step_x, step_y = args
-    do_interpolate(inliers, df, position, group, step_x, step_y)
+    return do_interpolate(inliers, df, position, group, step_x, step_y)
 
 def do_interpolate(inliers, df, position, group, step_x, step_y):
     logging.debug(f"Interpolating {position}")

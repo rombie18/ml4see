@@ -126,7 +126,7 @@ def parallel_untar(tar_file, output_dir):
 
 def untar_chunk_args(args):
     tar_file, tar_members, output_dir, chunk_start, chunk_end = args
-    untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end)
+    return untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end)
 
 
 def untar_chunk(tar_file, tar_members, output_dir, chunk_start, chunk_end):
