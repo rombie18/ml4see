@@ -5,6 +5,9 @@ In this repository, a comprehensive data processing pipeline is designed that al
 
 The project involves a comprehensive data processing pipeline for handling experimental data from CERN. The process begins with the data_retrieval_download.py script, allowing users to parallelize file downloads with the ability to resume interrupted transfers. Following this, the integrity of the downloaded files is verified using data_retrieval_verify.py. The next step involves parallel extraction of downloaded tar files using data_retrieval_extract.py. Subsequently, two scripts, namely data_structuring_1.py and data_structuring_2.py, focus on structuring the data by creating consolidated HDF5 files, emphasizing modularity, and parallel processing. The first script processes Software-Defined Radio (SDR) data, while the second annotates baseline data for SDR transients. Finally, the feature_extraction.py script extracts features from transients stored in HDF5 files, supporting parallel processing and saving results as CSV files for further analysis. The overall processing flow encompasses downloading, verification, extraction, structuring, baseline annotation, and feature extraction, providing a comprehensive framework for handling experimental data efficiently.
 
+## Folder structure
+The `new` folder contains newly created scripts and material created for the Master's Thesis by Wout Rombouts. Scripts and code in the `mcb2022_analysis-main` are created by Stefan Biereigel. The newly created code is based and expanded upon the previously made available material by Stefan.
+
 ## Summary of scripts
 `data_retrieval_download.py`
 
