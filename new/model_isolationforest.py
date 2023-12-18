@@ -67,7 +67,10 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    plot(df, df_filtered, run_number)
+    # plot(df, df_filtered, run_number)
+    # plot_λ(df, df_filtered, run_number)
+    plot_3(df, df_filtered, run_number)
+    plot_4(df, df_filtered, run_number)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -149,6 +152,9 @@ def isolation_forest(df: pd.DataFrame):
 
 
 def plot(df, df_filtered, run_number):
+    """ Heatmap of fitted maximum frequency deviation (N) in function to X and Y position """
+    # TODO replace fitted frequency deviation by actual maximum deviation
+
     df_filtered_grouped = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
@@ -170,14 +176,14 @@ def plot(df, df_filtered, run_number):
     h1 = sns.heatmap(
         heatmap_filtered,
         square=True,
-        cbar_kws={"label": "Frequency deviation (Hz)", "fraction": 0.046, "pad": 0.04},
+        cbar_kws={"label": "SEFT peak deviation (ppm)", "fraction": 0.046, "pad": 0.04},
         cmap="jet",
         ax=axs[0],
     )
     h2 = sns.heatmap(
         heatmap,
         square=True,
-        cbar_kws={"label": "Frequency deviation (Hz)", "fraction": 0.046, "pad": 0.04},
+        cbar_kws={"label": "SEFT peak deviation (ppm)", "fraction": 0.046, "pad": 0.04},
         cmap="jet",
         ax=axs[1],
     )
@@ -211,7 +217,92 @@ def plot(df, df_filtered, run_number):
     plt.close()
 
 
+def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
+    """ Heatmap of exponential decay constant (λ) in function to X and Y position """
+
+    df_filtered_grouped = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
+        .mean()
+        .reset_index()
+    )
+    heatmap_filtered = df_filtered_grouped.pivot(
+        index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
+    ).transpose()
+
+    df_grouped = (
+        df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
+        .mean()
+        .reset_index()
+    )
+    heatmap = df_grouped.pivot(
+        index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
+    ).transpose()
+
+    # Mark missing data with vibrant color
+    sns.set_style(rc={"axes.facecolor": "limegreen"})
+
+    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+    fig.tight_layout(w_pad=15)
+
+    h1 = sns.heatmap(
+        heatmap_filtered,
+        square=True,
+        cbar_kws={
+            "label": "Exponential decay constant (1/s)",
+            "fraction": 0.046,
+            "pad": 0.04,
+        },
+        cmap="jet",
+        ax=axs[0],
+        vmin=0,
+        vmax=1000,
+    )
+    h2 = sns.heatmap(
+        heatmap,
+        square=True,
+        cbar_kws={
+            "label": "Exponential decay constant (1/s)",
+            "fraction": 0.046,
+            "pad": 0.04,
+        },
+        cmap="jet",
+        ax=axs[1],
+        vmin=0,
+        vmax=1000,
+    )
+
+    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("Y position (µm)")
+    axs[0].set_xticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_xticklabels()]
+    )
+    axs[0].set_yticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_yticklabels()]
+    )
+    axs[0].invert_yaxis()
+
+    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("Y position (µm)")
+    axs[1].set_xticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_xticklabels()]
+    )
+    axs[1].set_yticklabels(
+        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_yticklabels()]
+    )
+    axs[1].invert_yaxis()
+
+    # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
+    h2.collections[0].set_clim(h1.collections[0].get_clim())
+
+    plt.savefig(f"plots/heatmap_1_λ.png", bbox_inches="tight")
+    plt.close()
+    
+
 def plot_2(df, df_filtered, run_number):
+    """ 3D visual of SEFT deviation """
+
     df_heatmap = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
@@ -227,32 +318,59 @@ def plot_2(df, df_filtered, run_number):
 
 
 def plot_3(df, df_filtered, run_number):
-    df_heatmap = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
-    )
+    """ Cross section in X direction """
 
-    df_heatmap = df_heatmap[df_heatmap["y_um"] == 0]
-
-    plt.scatter(df_heatmap["x_um"], df_heatmap["posttrig_exp_fit_N"])
-
-    plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
-    plt.close()
-
-
-def plot_4(df, df_filtered, run_number):
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
     )
 
     df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
 
-    fig, axs = plt.subplots(1, 2)
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
 
+    axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("SEFT peak deviation (ppm)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color='lightgray')
+
+    axs[1].scatter(df["x_um"], df["posttrig_exp_fit_N"], marker=".")
+    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("SEFT peak deviation (ppm)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color='lightgray')
+
+    plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
+    plt.close()
+
+def plot_4(df, df_filtered, run_number):
+    """ Cross section in Y direction """
+
+    df_filtered = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    )
+
+    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+    
     axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_xlabel("Y position (µm)")
+    axs[0].set_ylabel("SEFT peak deviation (ppm)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color='lightgray')
+    
     axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker=".")
-
-    axs[0].set_title("Outliers filtered")
-    axs[1].set_title("No filtering")
+    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_xlabel("Y position (µm)")
+    axs[1].set_ylabel("SEFT peak deviation (ppm)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color='lightgray')
 
     plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
     plt.close()
@@ -316,6 +434,7 @@ def interpolate_lost_data(inliers, df, df_original):
 def do_interpolate_args(args):
     inliers, df, position, group, step_x, step_y = args
     return do_interpolate(inliers, df, position, group, step_x, step_y)
+
 
 def do_interpolate(inliers, df, position, group, step_x, step_y):
     logging.debug(f"Interpolating {position}")

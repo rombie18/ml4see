@@ -112,6 +112,7 @@ def process_transient(h5_path, tran_name):
         scan_y_lsb_per_um = h5file["meta"].attrs["scan_y_lsb_per_um"]
 
         fs = h5file["sdr_data"].attrs["sdr_info_fs"]
+        sdr_cf = h5file["sdr_data"].attrs["sdr_info_cf"]
         len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
         dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
@@ -122,13 +123,16 @@ def process_transient(h5_path, tran_name):
         baseline_freq_std = transient.attrs["baseline_freq_std_hz"]
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
+        
+        # Calculate true oscillator frequency for ppm error
+        f0 = sdr_cf + baseline_freq
 
         # Construct time and frequency arrays, calculate the frequency error in ppm
         tran_time = (
             np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         )
         tran_freq = (
-            np.subtract(np.array(transient), baseline_freq) / baseline_freq * 1e6
+            np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
         )
 
         # Construct pre-trigger baseline arrays
