@@ -188,6 +188,7 @@ def plot(df, df_filtered, run_number):
         ax=axs[1],
     )
 
+    # TODO ticks on axis in steps of 15 µm
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
     axs[0].set_xlabel("Beam position X (µm)")
     axs[0].set_ylabel("Beam position Y (µm)")
@@ -253,9 +254,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
             "pad": 0.04,
         },
         cmap="jet",
-        ax=axs[0],
-        vmin=0,
-        vmax=1000,
+        ax=axs[0]
     )
     h2 = sns.heatmap(
         heatmap,
@@ -266,9 +265,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
             "pad": 0.04,
         },
         cmap="jet",
-        ax=axs[1],
-        vmin=0,
-        vmax=1000,
+        ax=axs[1]
     )
 
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
