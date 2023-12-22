@@ -11,8 +11,17 @@ from isotree import IsolationForest
 from multiprocessing import Pool
 from matplotlib.ticker import StrMethodFormatter
 
-from config import DATA_FEATURES_DIRECTORY, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP
+from config import (
+    DATA_FEATURES_DIRECTORY,
+    BLOCK_SIZE_X,
+    BLOCK_SIZE_Y,
+    BLOCK_OVERLAP,
+)
 
+# Decision boundary for outlier score classification (outlier if score >= OUTLIER_BOUNDARY, inlier if score < OUTLIER_BOUNDARY)
+OUTLIER_BOUNDARY = 0.4
+
+# Features to be used for outlier detection, any extreme or deviating values in these will likely result in outlier
 FEATURES = [
     "pretrig_std",
     "posttrig_exp_fit_R2",
@@ -44,6 +53,18 @@ def main():
     logging.debug("Reading features from csv")
     df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
 
+    # Only retain specified area of interest
+    # TODO make this cleaner and maybe seperate function?
+    x_range = (-200, 190)
+    y_range = None
+    if x_range != None:
+        logging.debug(f"x_range present, limiting plot to {y_range}")
+        df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
+
+    if y_range != None:
+        logging.debug(f"y_range present, limiting plot to {y_range}")
+        df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
+
     # Segment dataframe into blocks and apply processing to each block
     logging.info("Segmenting run into blocks")
     # TODO make block size dynamic based on run resolution
@@ -67,10 +88,12 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
-    # plot(df, df_filtered, run_number)
-    # plot_λ(df, df_filtered, run_number)
-    # plot_3(df, df_filtered, run_number)
-    # plot_4(df, df_filtered, run_number)
+    plot(df, df_filtered, run_number)
+    plot_λ(df, df_filtered, run_number)
+    plot_3(df, df_filtered, run_number, 0)
+    plot_4(df, df_filtered, run_number, 0)
+    plot_3_λ(df, df_filtered, run_number, 0)
+    plot_4_λ(df, df_filtered, run_number, 0)
     # plot_5(df, df_filtered, run_number)
 
 
@@ -153,7 +176,7 @@ def isolation_forest(df: pd.DataFrame):
 
 
 def plot(df, df_filtered, run_number):
-    """ Heatmap of fitted maximum frequency deviation (N) in function to X and Y position """
+    """Heatmap of fitted maximum frequency deviation (N) in function to X and Y position"""
     # TODO replace fitted frequency deviation by actual maximum deviation
 
     df_filtered_grouped = (
@@ -167,9 +190,6 @@ def plot(df, df_filtered, run_number):
     heatmap = df_grouped.pivot(
         index="x_um", columns="y_um", values="posttrig_exp_fit_N"
     ).transpose()
-
-    # Mark missing data with vibrant color
-    sns.set_style(rc={"axes.facecolor": "limegreen"})
 
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
     fig.tight_layout(w_pad=15)
@@ -220,28 +240,19 @@ def plot(df, df_filtered, run_number):
 
 
 def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
-    """ Heatmap of exponential decay constant (λ) in function to X and Y position """
+    """Heatmap of exponential decay constant (λ) in function to X and Y position"""
 
     df_filtered_grouped = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
-        .mean()
-        .reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
     )
     heatmap_filtered = df_filtered_grouped.pivot(
         index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
     ).transpose()
 
-    df_grouped = (
-        df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
-        .mean()
-        .reset_index()
-    )
+    df_grouped = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
     heatmap = df_grouped.pivot(
         index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
     ).transpose()
-
-    # Mark missing data with vibrant color
-    sns.set_style(rc={"axes.facecolor": "limegreen"})
 
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
     fig.tight_layout(w_pad=15)
@@ -255,7 +266,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
             "pad": 0.04,
         },
         cmap="jet",
-        ax=axs[0]
+        ax=axs[0],
     )
     h2 = sns.heatmap(
         heatmap,
@@ -266,7 +277,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
             "pad": 0.04,
         },
         cmap="jet",
-        ax=axs[1]
+        ax=axs[1],
     )
 
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
@@ -296,10 +307,10 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
 
     plt.savefig(f"plots/heatmap_1_λ.png", bbox_inches="tight")
     plt.close()
-    
+
 
 def plot_2(df, df_filtered, run_number):
-    """ 3D visual of SEFT deviation """
+    """3D visual of SEFT deviation"""
 
     df_heatmap = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
@@ -315,8 +326,12 @@ def plot_2(df, df_filtered, run_number):
     plt.close()
 
 
-def plot_3(df, df_filtered, run_number):
-    """ Cross section in X direction """
+def plot_3(df, df_filtered, run_number, slice_y=None):
+    """Cross section in X direction"""
+
+    if slice_y != None:
+        df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
+        df = df[df["y_um"].round(0) == slice_y]
 
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
@@ -328,24 +343,33 @@ def plot_3(df, df_filtered, run_number):
     fig.tight_layout(w_pad=5)
 
     axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
-    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_title(
+        f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
+    )
     axs[0].set_xlabel("X position (µm)")
     axs[0].set_ylabel("SEFT peak deviation (ppm)")
     axs[0].set_axisbelow(True)
-    axs[0].grid(color='lightgray')
+    axs[0].grid(color="lightgray")
 
     axs[1].scatter(df["x_um"], df["posttrig_exp_fit_N"], marker=".")
-    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
+    )
     axs[1].set_xlabel("X position (µm)")
     axs[1].set_ylabel("SEFT peak deviation (ppm)")
     axs[1].set_axisbelow(True)
-    axs[1].grid(color='lightgray')
+    axs[1].grid(color="lightgray")
 
     plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
     plt.close()
 
-def plot_4(df, df_filtered, run_number):
-    """ Cross section in Y direction """
+
+def plot_4(df, df_filtered, run_number, slice_x=None):
+    """Cross section in Y direction"""
+
+    if slice_x != None:
+        df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
+        df = df[df["x_um"].round(0) == slice_x]
 
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
@@ -355,47 +379,129 @@ def plot_4(df, df_filtered, run_number):
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
-    
+
     axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
-    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_title(
+        f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
+    )
     axs[0].set_xlabel("Y position (µm)")
     axs[0].set_ylabel("SEFT peak deviation (ppm)")
     axs[0].set_axisbelow(True)
-    axs[0].grid(color='lightgray')
-    
+    axs[0].grid(color="lightgray")
+
     axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker=".")
-    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
+    )
     axs[1].set_xlabel("Y position (µm)")
     axs[1].set_ylabel("SEFT peak deviation (ppm)")
     axs[1].set_axisbelow(True)
-    axs[1].grid(color='lightgray')
+    axs[1].grid(color="lightgray")
 
     plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
     plt.close()
-    
+
+
+def plot_3_λ(df, df_filtered, run_number, slice_y=None):
+    """Cross section in X direction"""
+
+    if slice_y != None:
+        df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
+        df = df[df["y_um"].round(0) == slice_y]
+
+    df_filtered = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+    )
+
+    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_exp_fit_λ"], marker=".")
+    axs[0].set_title(
+        f"SEFT exponential decay constant, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
+    )
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("Exponential decay constant (1/s)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+
+    axs[1].scatter(df["x_um"], df["posttrig_exp_fit_λ"], marker=".")
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
+    )
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("Exponential decay constant (1/s)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+
+    plt.savefig(f"plots/heatmap_3_λ.png", bbox_inches="tight")
+    plt.close()
+
+
+def plot_4_λ(df, df_filtered, run_number, slice_x=None):
+    """Cross section in Y direction"""
+
+    if slice_x != None:
+        df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
+        df = df[df["x_um"].round(0) == slice_x]
+
+    df_filtered = (
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+    )
+
+    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_λ"], marker=".")
+    axs[0].set_title(
+        f"SEFT exponential decay constant, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
+    )
+    axs[0].set_xlabel("Y position (µm)")
+    axs[0].set_ylabel("Exponential decay constant (1/s)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+
+    axs[1].scatter(df["y_um"], df["posttrig_exp_fit_λ"], marker=".")
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
+    )
+    axs[1].set_xlabel("Y position (µm)")
+    axs[1].set_ylabel("Exponential decay constant (1/s)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+
+    plt.savefig(f"plots/heatmap_4_λ.png", bbox_inches="tight")
+    plt.close()
+
 
 def plot_5(df, df_filtered, run_number):
-    """ Sensitivity loss in function of time """
+    """Sensitivity loss in function of time"""
 
     df_filtered = df_filtered.reset_index()
     df = df.reset_index()
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
-    
-    axs[0].scatter(df_filtered["transient"], df_filtered["posttrig_exp_fit_N"], marker=".")
+
+    axs[0].scatter(
+        df_filtered["transient"], df_filtered["posttrig_exp_fit_N"], marker="."
+    )
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
     axs[0].set_xlabel("Transient ID")
     axs[0].set_ylabel("SEFT peak deviation (ppm)")
     axs[0].set_axisbelow(True)
-    axs[0].grid(color='lightgray')
-    
+    axs[0].grid(color="lightgray")
+
     axs[1].scatter(df["transient"], df["posttrig_exp_fit_N"], marker=".")
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
     axs[1].set_xlabel("Transient ID")
     axs[1].set_ylabel("SEFT peak deviation (ppm)")
     axs[1].set_axisbelow(True)
-    axs[1].grid(color='lightgray')
+    axs[1].grid(color="lightgray")
 
     plt.savefig(f"plots/heatmap_5.png", bbox_inches="tight")
     plt.close()
@@ -416,8 +522,8 @@ def processing_pipeline(df):
     y_pred = y_pred[:-2]
 
     # Decide outliers and inliers based on score
-    outlier_indices = [i for i, point in enumerate(y_pred) if point >= 0.5]
-    inlier_indices = [i for i, point in enumerate(y_pred) if point < 0.5]
+    outlier_indices = [i for i, point in enumerate(y_pred) if point >= OUTLIER_BOUNDARY]
+    inlier_indices = [i for i, point in enumerate(y_pred) if point < OUTLIER_BOUNDARY]
 
     # Get outlier ids in block
     outliers = df.iloc[outlier_indices]["transient"].tolist()
