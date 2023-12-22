@@ -69,8 +69,9 @@ def main():
     logging.info("Plotting heatmap")
     # plot(df, df_filtered, run_number)
     # plot_λ(df, df_filtered, run_number)
-    plot_3(df, df_filtered, run_number)
-    plot_4(df, df_filtered, run_number)
+    # plot_3(df, df_filtered, run_number)
+    # plot_4(df, df_filtered, run_number)
+    # plot_5(df, df_filtered, run_number)
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -370,6 +371,33 @@ def plot_4(df, df_filtered, run_number):
     axs[1].grid(color='lightgray')
 
     plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
+    plt.close()
+    
+
+def plot_5(df, df_filtered, run_number):
+    """ Sensitivity loss in function of time """
+
+    df_filtered = df_filtered.reset_index()
+    df = df.reset_index()
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+    
+    axs[0].scatter(df_filtered["transient"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    axs[0].set_xlabel("Transient ID")
+    axs[0].set_ylabel("SEFT peak deviation (ppm)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color='lightgray')
+    
+    axs[1].scatter(df["transient"], df["posttrig_exp_fit_N"], marker=".")
+    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    axs[1].set_xlabel("Transient ID")
+    axs[1].set_ylabel("SEFT peak deviation (ppm)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color='lightgray')
+
+    plt.savefig(f"plots/heatmap_5.png", bbox_inches="tight")
     plt.close()
 
 
