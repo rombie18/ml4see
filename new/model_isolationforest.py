@@ -9,7 +9,6 @@ import warnings
 import seaborn as sns
 from isotree import IsolationForest
 from multiprocessing import Pool
-from matplotlib.ticker import StrMethodFormatter
 
 from config import (
     DATA_FEATURES_DIRECTORY,
@@ -55,8 +54,8 @@ def main():
 
     # Only retain specified area of interest
     # TODO make this cleaner and maybe seperate function?
-    x_range = (-200, 190)
-    y_range = None
+    x_range = (-215, 215)
+    y_range = (-215, 215)
     if x_range != None:
         logging.debug(f"x_range present, limiting plot to {y_range}")
         df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
@@ -86,6 +85,13 @@ def main():
     logging.info("Interpolating missing data points from neighbors")
     df_filtered = interpolate_lost_data(inliers, df_filtered, df)
 
+    # TODO temp save processed transients to csv
+    # df_filtered = df_filtered.sort_values(by=["x_um"])
+    # df_filtered.to_csv(
+    #     f"run_processed_{run_number:03d}.csv",
+    #     index=False,
+    # )
+
     # Plot heatmap
     logging.info("Plotting heatmap")
     plot(df, df_filtered, run_number)
@@ -95,6 +101,31 @@ def main():
     plot_3_λ(df, df_filtered, run_number, 0)
     plot_4_λ(df, df_filtered, run_number, 0)
     # plot_5(df, df_filtered, run_number)
+
+
+def processing_pipeline(df):
+    # Determine current block
+    block_x, block_y = df["block_x"].iloc[0], df["block_y"].iloc[0]
+    logging.debug(f"Processing block_x: {block_x}, block_y: {block_y}")
+
+    # Inject manual outliers to prevent no-outlier situation
+    dfi = inject_points(df)
+
+    # Apply Isolation Forest model on selected features
+    y_pred = isolation_forest(dfi[FEATURES])
+
+    # Undo effect of manual outlier injection
+    y_pred = y_pred[:-2]
+
+    # Decide outliers and inliers based on score
+    outlier_indices = [i for i, point in enumerate(y_pred) if point >= OUTLIER_BOUNDARY]
+    inlier_indices = [i for i, point in enumerate(y_pred) if point < OUTLIER_BOUNDARY]
+
+    # Get outlier ids in block
+    outliers = df.iloc[outlier_indices]["transient"].tolist()
+    inliers = df.iloc[inlier_indices]["transient"].tolist()
+
+    return outliers, inliers
 
 
 def segment_dataframe(df, block_size_x, block_size_y, overlap_percentage):
@@ -124,6 +155,8 @@ def inject_points(df):
             "y_lsb": -1,
             "x_um": -1,
             "y_um": -1,
+            "pretrig_max": 0,
+            "posttrig_max": 0,
             "pretrig_std": 0,
             "posttrig_std": 0,
             "posttrig_exp_fit_N": 0,
@@ -137,9 +170,11 @@ def inject_points(df):
             "y_lsb": -1,
             "x_um": -1,
             "y_um": -1,
+            "pretrig_max": 0,
+            "posttrig_max": 10,
             "pretrig_std": 0,
             "posttrig_std": 3000,
-            "posttrig_exp_fit_N": 20000,
+            "posttrig_exp_fit_N": 10,
             "posttrig_exp_fit_λ": 3000,
             "posttrig_exp_fit_c": 0,
             "posttrig_exp_fit_R2": 1,
@@ -175,20 +210,90 @@ def isolation_forest(df: pd.DataFrame):
     return y_pred
 
 
+def interpolate_lost_data(inliers, df, df_original):
+    # When all points on same position are rejected as outlier, no data is available
+    # --> Interpolate lost data points from neighboring points
+
+    positions = df_original.groupby(["x_um", "y_um"])["transient"]
+
+    # Extract unique x and y values from the grouped object
+    xy_groups = [position for (position, _) in positions]
+    x_groups, y_groups = zip(*xy_groups)
+    x_values = np.unique(x_groups)
+    y_values = np.unique(y_groups)
+
+    # Calculate step size for x and y
+    step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
+    step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
+
+    # Interpolate missing data from neighbors in parallel
+    with Pool() as pool:
+        args = [
+            (inliers, df, position, group, step_x, step_y)
+            for (position, group) in positions
+        ]
+        points_list = pool.map(do_interpolate_args, args)
+        points_list = [x for x in points_list if x is not None]
+
+        df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
+
+    return df
+
+
+def do_interpolate_args(args):
+    inliers, df, position, group, step_x, step_y = args
+    return do_interpolate(inliers, df, position, group, step_x, step_y)
+
+
+def do_interpolate(inliers, df, position, group, step_x, step_y):
+    logging.debug(f"Interpolating {position}")
+
+    x_um, y_um = position
+    transients = group.values
+    # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
+    if not any(transient in inliers for transient in transients):
+        select_neighbors = (
+            (df["x_um"] < x_um + step_x)
+            & (df["x_um"] > x_um - step_x)
+            & (df["y_um"] < y_um + step_y)
+            & (df["y_um"] > y_um - step_y)
+        )
+
+        neighbors = df.loc[select_neighbors]
+
+        point = {
+            "transient": f"intr_{randint(0, 999999):06d}",
+            "x_lsb": None,
+            "y_lsb": None,
+            "x_um": x_um,
+            "y_um": y_um,
+            "pretrig_max": neighbors["pretrig_max"].mean(),
+            "posttrig_max": neighbors["posttrig_max"].mean(),
+            "pretrig_std": neighbors["pretrig_std"].mean(),
+            "posttrig_std": neighbors["posttrig_std"].mean(),
+            "posttrig_exp_fit_N": neighbors["posttrig_exp_fit_N"].mean(),
+            "posttrig_exp_fit_λ": neighbors["posttrig_exp_fit_λ"].mean(),
+            "posttrig_exp_fit_c": neighbors["posttrig_exp_fit_c"].mean(),
+            "posttrig_exp_fit_R2": neighbors["posttrig_exp_fit_R2"].mean(),
+        }
+
+        return point
+
+
 def plot(df, df_filtered, run_number):
     """Heatmap of fitted maximum frequency deviation (N) in function to X and Y position"""
     # TODO replace fitted frequency deviation by actual maximum deviation
 
     df_filtered_grouped = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
     )
     heatmap_filtered = df_filtered_grouped.pivot(
-        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
+        index="x_um", columns="y_um", values="posttrig_max"
     ).transpose()
 
-    df_grouped = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    df_grouped = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
     heatmap = df_grouped.pivot(
-        index="x_um", columns="y_um", values="posttrig_exp_fit_N"
+        index="x_um", columns="y_um", values="posttrig_max"
     ).transpose()
 
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
@@ -267,6 +372,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
         },
         cmap="jet",
         ax=axs[0],
+        vmax=1000
     )
     h2 = sns.heatmap(
         heatmap,
@@ -313,10 +419,10 @@ def plot_2(df, df_filtered, run_number):
     """3D visual of SEFT deviation"""
 
     df_heatmap = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
     )
 
-    x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["posttrig_exp_fit_N"]
+    x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["posttrig_max"]
 
     # Set up plot
     fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
@@ -334,15 +440,15 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         df = df[df["y_um"].round(0) == slice_y]
 
     df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
     )
 
-    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    df = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_max"], marker=".")
     axs[0].set_title(
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
     )
@@ -351,7 +457,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["x_um"], df["posttrig_exp_fit_N"], marker=".")
+    axs[1].scatter(df["x_um"], df["posttrig_max"], marker=".")
     axs[1].set_title(
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
     )
@@ -372,15 +478,15 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         df = df[df["x_um"].round(0) == slice_x]
 
     df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
     )
 
-    df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_N"].mean().reset_index()
+    df = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_N"], marker=".")
+    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_max"], marker=".")
     axs[0].set_title(
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
     )
@@ -389,7 +495,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["y_um"], df["posttrig_exp_fit_N"], marker=".")
+    axs[1].scatter(df["y_um"], df["posttrig_max"], marker=".")
     axs[1].set_title(
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
     )
@@ -487,16 +593,14 @@ def plot_5(df, df_filtered, run_number):
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(
-        df_filtered["transient"], df_filtered["posttrig_exp_fit_N"], marker="."
-    )
+    axs[0].scatter(df_filtered["transient"], df_filtered["posttrig_max"], marker=".")
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
     axs[0].set_xlabel("Transient ID")
     axs[0].set_ylabel("SEFT peak deviation (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["transient"], df["posttrig_exp_fit_N"], marker=".")
+    axs[1].scatter(df["transient"], df["posttrig_max"], marker=".")
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
     axs[1].set_xlabel("Transient ID")
     axs[1].set_ylabel("SEFT peak deviation (ppm)")
@@ -505,99 +609,6 @@ def plot_5(df, df_filtered, run_number):
 
     plt.savefig(f"plots/heatmap_5.png", bbox_inches="tight")
     plt.close()
-
-
-def processing_pipeline(df):
-    # Determine current block
-    block_x, block_y = df["block_x"].iloc[0], df["block_y"].iloc[0]
-    logging.debug(f"Processing block_x: {block_x}, block_y: {block_y}")
-
-    # Inject manual outliers to prevent no-outlier situation
-    dfi = inject_points(df)
-
-    # Apply Isolation Forest model on selected features
-    y_pred = isolation_forest(dfi[FEATURES])
-
-    # Undo effect of manual outlier injection
-    y_pred = y_pred[:-2]
-
-    # Decide outliers and inliers based on score
-    outlier_indices = [i for i, point in enumerate(y_pred) if point >= OUTLIER_BOUNDARY]
-    inlier_indices = [i for i, point in enumerate(y_pred) if point < OUTLIER_BOUNDARY]
-
-    # Get outlier ids in block
-    outliers = df.iloc[outlier_indices]["transient"].tolist()
-    inliers = df.iloc[inlier_indices]["transient"].tolist()
-
-    return outliers, inliers
-
-
-def interpolate_lost_data(inliers, df, df_original):
-    # When all points on same position are rejected as outlier, no data is available
-    # --> Interpolate lost data points from neighboring points
-
-    positions = df_original.groupby(["x_um", "y_um"])["transient"]
-
-    # Extract unique x and y values from the grouped object
-    xy_groups = [position for (position, _) in positions]
-    x_groups, y_groups = zip(*xy_groups)
-    x_values = np.unique(x_groups)
-    y_values = np.unique(y_groups)
-
-    # Calculate step size for x and y
-    step_x = np.diff(x_values)[0] * 1.5 if len(x_values) > 1 else 0
-    step_y = np.diff(y_values)[0] * 1.5 if len(y_values) > 1 else 0
-
-    # Interpolate missing data from neighbors in parallel
-    with Pool() as pool:
-        args = [
-            (inliers, df, position, group, step_x, step_y)
-            for (position, group) in positions
-        ]
-        points_list = pool.map(do_interpolate_args, args)
-        points_list = [x for x in points_list if x is not None]
-
-        df = pd.concat([df, pd.DataFrame(points_list)], ignore_index=True)
-
-    return df
-
-
-def do_interpolate_args(args):
-    inliers, df, position, group, step_x, step_y = args
-    return do_interpolate(inliers, df, position, group, step_x, step_y)
-
-
-def do_interpolate(inliers, df, position, group, step_x, step_y):
-    logging.debug(f"Interpolating {position}")
-
-    x_um, y_um = position
-    transients = group.values
-    # If no transient at position is inlier i.e. if all transients are outliers, do interpolation
-    if not any(transient in inliers for transient in transients):
-        select_neighbors = (
-            (df["x_um"] < x_um + step_x)
-            & (df["x_um"] > x_um - step_x)
-            & (df["y_um"] < y_um + step_y)
-            & (df["y_um"] > y_um - step_y)
-        )
-
-        neighbors = df.loc[select_neighbors]
-
-        point = {
-            "transient": f"intr_{randint(0, 999999):03d}",
-            "x_lsb": None,
-            "y_lsb": None,
-            "x_um": x_um,
-            "y_um": y_um,
-            "pretrig_std": neighbors["pretrig_std"].mean(),
-            "posttrig_std": neighbors["posttrig_std"].mean(),
-            "posttrig_exp_fit_N": neighbors["posttrig_exp_fit_N"].mean(),
-            "posttrig_exp_fit_λ": neighbors["posttrig_exp_fit_λ"].mean(),
-            "posttrig_exp_fit_c": neighbors["posttrig_exp_fit_c"].mean(),
-            "posttrig_exp_fit_R2": neighbors["posttrig_exp_fit_R2"].mean(),
-        }
-
-        return point
 
 
 if __name__ == "__main__":

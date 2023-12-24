@@ -144,9 +144,6 @@ def process_transient(h5_path, tran_name):
         tran_posttrig_freq = tran_freq[len_pretrig:]
 
         # Downsample data
-        tran_freq_ds, tran_time_ds = moving_average(
-            tran_freq, tran_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
-        )
         tran_pretrig_freq_ds, tran_pretrig_time_ds = moving_average(
             tran_pretrig_freq, tran_pretrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
         )
@@ -161,7 +158,8 @@ def process_transient(h5_path, tran_name):
         features["y_lsb"] = y_lsb
         features["x_um"] = x_lsb / scan_x_lsb_per_um
         features["y_um"] = y_lsb / scan_y_lsb_per_um
-        features["max"] = np.max(tran_freq_ds)
+        features["pretrig_max"] = np.max(tran_pretrig_freq_ds)
+        features["posttrig_max"] = np.max(tran_posttrig_freq_ds)
         features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
         features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
 
