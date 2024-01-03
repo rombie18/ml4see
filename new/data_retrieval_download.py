@@ -35,6 +35,8 @@ from multiprocessing import Pool
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH, DOWNLOAD_ATTEMPTS
 
+# TODO add support for partial file downloading
+
 
 def main():
     # Initialise logging

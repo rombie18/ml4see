@@ -37,6 +37,8 @@ from multiprocessing import Pool
 
 from config import DATA_DOWNLOAD_DIRECTORY, DATA_SUMMARY_PATH
 
+# TODO add support for partial file handling, combine to one file if all parts valid checksum
+
 
 def main():
     # Initialise logging
