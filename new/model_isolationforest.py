@@ -372,7 +372,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
         },
         cmap="jet",
         ax=axs[0],
-        vmax=1000
+        # vmax=1000
     )
     h2 = sns.heatmap(
         heatmap,

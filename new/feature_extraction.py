@@ -120,7 +120,6 @@ def process_transient(h5_path, tran_name):
 
         # Get additional transient meta data
         baseline_freq = transient.attrs["baseline_freq_mean_hz"]
-        baseline_freq_std = transient.attrs["baseline_freq_std_hz"]
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
         
@@ -158,6 +157,9 @@ def process_transient(h5_path, tran_name):
         features["y_lsb"] = y_lsb
         features["x_um"] = x_lsb / scan_x_lsb_per_um
         features["y_um"] = y_lsb / scan_y_lsb_per_um
+        features["trig_val"] = tran_posttrig_freq_ds[0]
+        features["pretrig_min"] = np.min(tran_pretrig_freq_ds)
+        features["posttrig_min"] = np.min(tran_posttrig_freq_ds)
         features["pretrig_max"] = np.max(tran_pretrig_freq_ds)
         features["posttrig_max"] = np.max(tran_posttrig_freq_ds)
         features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
@@ -171,7 +173,7 @@ def process_transient(h5_path, tran_name):
         )
         boundaries = (
             [
-                0,
+                -np.inf,
                 0,
                 -np.inf,
             ],

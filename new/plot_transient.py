@@ -30,23 +30,32 @@ with h5py.File(h5_path, "r") as h5file:
     # Get transient data from file
     transient = h5file["sdr_data"]["all"][tran_name]
 
-    # Get additional meta data
+    # Get run meta data
+    scan_x_lsb_per_um = h5file["meta"].attrs["scan_x_lsb_per_um"]
+    scan_y_lsb_per_um = h5file["meta"].attrs["scan_y_lsb_per_um"]
+
     fs = h5file["sdr_data"].attrs["sdr_info_fs"]
+    sdr_cf = h5file["sdr_data"].attrs["sdr_info_cf"]
     len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
     len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
     dsp_ntaps = h5file["sdr_data"].attrs["dsp_info_pre_demod_lpf_taps"]
     event_len = len_pretrig + len_posttrig - dsp_ntaps
 
-    # Subtract mean baseline frequency from each sample to get delta frequency
-    baseline_freq = h5file["sdr_data"]["all"][tran_name].attrs["baseline_freq_mean_hz"]
-    baseline_freq_var = h5file["sdr_data"]["all"][tran_name].attrs[
-        "baseline_freq_mean_hz"
-    ]
+    # Get additional transient meta data
+    baseline_freq = transient.attrs["baseline_freq_mean_hz"]
+    x_lsb = transient.attrs["x_lsb"]
+    y_lsb = transient.attrs["y_lsb"]
+    
+    # Calculate true oscillator frequency for ppm error
+    f0 = sdr_cf + baseline_freq
 
-    # Construct time and frequency arrays
-    tran_time = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-    tran_freq = np.subtract(np.array(transient), baseline_freq) / 2.5e9 * 1e6
-    # tran_freq = np.array(transient)
+    # Construct time and frequency arrays, calculate the frequency error in ppm
+    tran_time = (
+        np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
+    )
+    tran_freq = (
+        np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
+    )
 
     # Construct pre-trigger baseline arrays
     tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
@@ -57,9 +66,6 @@ with h5py.File(h5_path, "r") as h5file:
     tran_posttrig_freq = tran_freq[len_pretrig:]
 
     # Downsample data
-    tran_freq_ds, tran_time_ds = moving_average(
-        tran_freq, tran_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
-    )
     tran_pretrig_freq_ds, tran_pretrig_time_ds = moving_average(
         tran_pretrig_freq, tran_pretrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
     )
@@ -70,6 +76,15 @@ with h5py.File(h5_path, "r") as h5file:
     # Calculate features
     features = {}
     features["transient"] = tran_name
+    features["x_lsb"] = x_lsb
+    features["y_lsb"] = y_lsb
+    features["x_um"] = x_lsb / scan_x_lsb_per_um
+    features["y_um"] = y_lsb / scan_y_lsb_per_um
+    features["trig_val"] = tran_posttrig_freq_ds[0]
+    features["pretrig_min"] = np.min(tran_pretrig_freq_ds)
+    features["posttrig_min"] = np.min(tran_posttrig_freq_ds)
+    features["pretrig_max"] = np.max(tran_pretrig_freq_ds)
+    features["posttrig_max"] = np.max(tran_posttrig_freq_ds)
     features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
     features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
 
@@ -81,7 +96,7 @@ with h5py.File(h5_path, "r") as h5file:
     )
     boundaries = (
         [
-            0,
+            -np.inf,
             0,
             -np.inf,
         ],
@@ -96,7 +111,7 @@ with h5py.File(h5_path, "r") as h5file:
             tran_posttrig_time_ds,
             tran_posttrig_freq_ds,
             p0=initial_guess,
-            bounds=boundaries
+            bounds=boundaries,
         )
 
         # Caluculate coefficient of determination (R²)
@@ -104,9 +119,11 @@ with h5py.File(h5_path, "r") as h5file:
             tran_posttrig_time_ds, *params
         )
         ss_res = np.sum(residuals**2)
-        ss_tot = np.sum((tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2)
+        ss_tot = np.sum(
+            (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
+        )
         r_squared = 1 - (ss_res / ss_tot)
-        
+
         features["posttrig_exp_fit_R2"] = r_squared
 
         if r_squared > R2_THRESHOLD:
@@ -134,7 +151,8 @@ with h5py.File(h5_path, "r") as h5file:
     figure, axis = plt.subplots(1, 1)
 
     axis.plot(tran_time, tran_freq, ".")
-    axis.plot(tran_time_ds, tran_freq_ds, ".-")
+    axis.plot(tran_pretrig_time_ds, tran_pretrig_freq_ds, color="orange", linestyle="-")
+    axis.plot(tran_posttrig_time_ds, tran_posttrig_freq_ds, color="orange", linestyle="-")
 
     axis.axvline(
         x=tran_pretrig_time[-1],
@@ -146,17 +164,23 @@ with h5py.File(h5_path, "r") as h5file:
         axis.plot(
             tran_posttrig_time_ds,
             exponential_decay(tran_posttrig_time_ds, *params),
-            "c-",
-            linewidth=3,
+            color="cyan",
         )
+        
+        axis.axhline(
+            y=tran_posttrig_freq_ds[0],
+            color="red",
+            linestyle=":",
+        )
+        
     except:
         pass
 
     axis.set_title(f"Moving Average ({tran_name})")
 
-    min = np.min(tran_freq_ds)
-    min = min * 0.9
-    max = np.max(tran_freq_ds)
+    min = np.min([np.min(tran_pretrig_freq_ds), np.min(tran_posttrig_freq_ds)])
+    min = min * 1.1
+    max = np.max([np.max(tran_pretrig_freq_ds), np.max(tran_posttrig_freq_ds)])
     max = max * 1.1
     axis.set_ylim(min, max)
 
