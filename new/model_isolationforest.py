@@ -155,6 +155,9 @@ def inject_points(df):
             "y_lsb": -1,
             "x_um": -1,
             "y_um": -1,
+            "trig_val": 0,
+            "pretrig_min": 0,
+            "posttrig_min": 0,
             "pretrig_max": 0,
             "posttrig_max": 0,
             "pretrig_std": 0,
@@ -170,6 +173,9 @@ def inject_points(df):
             "y_lsb": -1,
             "x_um": -1,
             "y_um": -1,
+            "trig_val": 10,
+            "pretrig_min": 0,
+            "posttrig_min": 0,
             "pretrig_max": 0,
             "posttrig_max": 10,
             "pretrig_std": 0,
@@ -267,6 +273,9 @@ def do_interpolate(inliers, df, position, group, step_x, step_y):
             "y_lsb": None,
             "x_um": x_um,
             "y_um": y_um,
+            "trig_val": neighbors["trig_val"].mean(),
+            "pretrig_min": neighbors["pretrig_min"].mean(),
+            "posttrig_min": neighbors["posttrig_min"].mean(),
             "pretrig_max": neighbors["pretrig_max"].mean(),
             "posttrig_max": neighbors["posttrig_max"].mean(),
             "pretrig_std": neighbors["pretrig_std"].mean(),
@@ -285,15 +294,15 @@ def plot(df, df_filtered, run_number):
     # TODO replace fitted frequency deviation by actual maximum deviation
 
     df_filtered_grouped = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
     )
     heatmap_filtered = df_filtered_grouped.pivot(
-        index="x_um", columns="y_um", values="posttrig_max"
+        index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
-    df_grouped = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+    df_grouped = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
     heatmap = df_grouped.pivot(
-        index="x_um", columns="y_um", values="posttrig_max"
+        index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
@@ -419,10 +428,10 @@ def plot_2(df, df_filtered, run_number):
     """3D visual of SEFT deviation"""
 
     df_heatmap = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
     )
 
-    x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["posttrig_max"]
+    x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["trig_val"]
 
     # Set up plot
     fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
@@ -440,15 +449,15 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         df = df[df["y_um"].round(0) == slice_y]
 
     df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
     )
 
-    df = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+    df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_max"], marker=".")
+    axs[0].scatter(df_filtered["x_um"], df_filtered["trig_val"], marker=".")
     axs[0].set_title(
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
     )
@@ -457,7 +466,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["x_um"], df["posttrig_max"], marker=".")
+    axs[1].scatter(df["x_um"], df["trig_val"], marker=".")
     axs[1].set_title(
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
     )
@@ -478,15 +487,15 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         df = df[df["x_um"].round(0) == slice_x]
 
     df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
     )
 
-    df = df.groupby(["x_um", "y_um"])["posttrig_max"].mean().reset_index()
+    df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_max"], marker=".")
+    axs[0].scatter(df_filtered["y_um"], df_filtered["trig_val"], marker=".")
     axs[0].set_title(
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
     )
@@ -495,7 +504,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["y_um"], df["posttrig_max"], marker=".")
+    axs[1].scatter(df["y_um"], df["trig_val"], marker=".")
     axs[1].set_title(
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
     )
@@ -535,7 +544,7 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
 
     axs[1].scatter(df["x_um"], df["posttrig_exp_fit_λ"], marker=".")
     axs[1].set_title(
-        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
+        f"SEFT exponential decay constant, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
     )
     axs[1].set_xlabel("X position (µm)")
     axs[1].set_ylabel("Exponential decay constant (1/s)")
@@ -573,7 +582,7 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
 
     axs[1].scatter(df["y_um"], df["posttrig_exp_fit_λ"], marker=".")
     axs[1].set_title(
-        f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
+        f"SEFT exponential decay constant, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
     )
     axs[1].set_xlabel("Y position (µm)")
     axs[1].set_ylabel("Exponential decay constant (1/s)")
@@ -586,6 +595,7 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
 
 def plot_5(df, df_filtered, run_number):
     """Sensitivity loss in function of time"""
+    # TODO improve this plot
 
     df_filtered = df_filtered.reset_index()
     df = df.reset_index()
@@ -593,14 +603,14 @@ def plot_5(df, df_filtered, run_number):
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
 
-    axs[0].scatter(df_filtered["transient"], df_filtered["posttrig_max"], marker=".")
+    axs[0].scatter(df_filtered["transient"], df_filtered["trig_val"], marker=".")
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
     axs[0].set_xlabel("Transient ID")
     axs[0].set_ylabel("SEFT peak deviation (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
-    axs[1].scatter(df["transient"], df["posttrig_max"], marker=".")
+    axs[1].scatter(df["transient"], df["trig_val"], marker=".")
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
     axs[1].set_xlabel("Transient ID")
     axs[1].set_ylabel("SEFT peak deviation (ppm)")
