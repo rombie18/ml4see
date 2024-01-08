@@ -93,6 +93,8 @@ def main():
 
             logging.info(f"Successfully processed run {run_number:03d}")
 
+    logging.info("Done!")
+
 
 def process_transient_args(args):
     h5_path, tran_name = args
@@ -122,7 +124,7 @@ def process_transient(h5_path, tran_name):
         baseline_freq = transient.attrs["baseline_freq_mean_hz"]
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
-        
+
         # Calculate true oscillator frequency for ppm error
         f0 = sdr_cf + baseline_freq
 
@@ -130,9 +132,7 @@ def process_transient(h5_path, tran_name):
         tran_time = (
             np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
         )
-        tran_freq = (
-            np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
-        )
+        tran_freq = np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
 
         # Construct pre-trigger baseline arrays
         tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]

@@ -413,6 +413,8 @@ def main():
                 os.remove(h5_path)
             logging.exception(f"** RUN {run_number:03d} FAILED")
 
+    logging.info("Done!")
+
 
 if __name__ == "__main__":
     try:

@@ -88,6 +88,8 @@ def main():
     for tar_file in tar_files:
         parallel_untar(tar_file, DATA_RAW_DIRECTORY)
 
+    logging.info("Done!")
+
 
 def parallel_untar(tar_file, output_dir):
     """

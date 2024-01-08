@@ -153,6 +153,8 @@ def main():
 
             logging.info(f"** FINISHED RUN {run_number:03d} **")
 
+    logging.info("Done!")
+
 
 if __name__ == "__main__":
     try:

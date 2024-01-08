@@ -102,6 +102,8 @@ def main():
     plot_4_λ(df, df_filtered, run_number, 0)
     # plot_5(df, df_filtered, run_number)
 
+    logging.info("Done!")
+
 
 def processing_pipeline(df):
     # Determine current block
@@ -290,7 +292,7 @@ def do_interpolate(inliers, df, position, group, step_x, step_y):
 
 
 def plot(df, df_filtered, run_number):
-    """Heatmap of fitted maximum frequency deviation (N) in function to X and Y position"""
+    """Heatmap of fitted maximum frequency deviation (trig_val) in function to X and Y position"""
     # TODO replace fitted frequency deviation by actual maximum deviation
 
     df_filtered_grouped = (
@@ -349,7 +351,9 @@ def plot(df, df_filtered, run_number):
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h2.collections[0].set_clim(h1.collections[0].get_clim())
 
-    plt.savefig(f"plots/heatmap_1.png", bbox_inches="tight")
+    plt.savefig(
+        f"plots/{run_number:03d}/heatmap__frequency_deviation.png", bbox_inches="tight"
+    )
     plt.close()
 
 
@@ -420,16 +424,17 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h2.collections[0].set_clim(h1.collections[0].get_clim())
 
-    plt.savefig(f"plots/heatmap_1_λ.png", bbox_inches="tight")
+    plt.savefig(
+        f"plots/{run_number:03d}/heatmap__exponential_decay_constant.png",
+        bbox_inches="tight",
+    )
     plt.close()
 
 
 def plot_2(df, df_filtered, run_number):
     """3D visual of SEFT deviation"""
 
-    df_heatmap = (
-        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
-    )
+    df_heatmap = df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
     x, y, z = df_heatmap["x_um"], df_heatmap["y_um"], df_heatmap["trig_val"]
 
@@ -437,7 +442,9 @@ def plot_2(df, df_filtered, run_number):
     fig, ax = plt.subplots(subplot_kw=dict(projection="3d"))
     surf = ax.plot_trisurf(x, y, z, linewidth=0, antialiased=False, cmap="jet")
 
-    plt.savefig(f"plots/heatmap_2.png", bbox_inches="tight")
+    plt.savefig(
+        f"plots/{run_number:03d}/3Dmap__frequency_deviation.png", bbox_inches="tight"
+    )
     plt.close()
 
 
@@ -448,9 +455,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
         df = df[df["y_um"].round(0) == slice_y]
 
-    df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
-    )
+    df_filtered = df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
     df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
@@ -475,7 +480,12 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    plt.savefig(f"plots/heatmap_3.png", bbox_inches="tight")
+    if slice_y == None:
+        slice_y = "auto"
+    plt.savefig(
+        f"plots/{run_number:03d}/cross_section__Y={slice_y}__frequency_deviation.png",
+        bbox_inches="tight",
+    )
     plt.close()
 
 
@@ -486,9 +496,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
         df = df[df["x_um"].round(0) == slice_x]
 
-    df_filtered = (
-        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
-    )
+    df_filtered = df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
     df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
@@ -513,7 +521,12 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    plt.savefig(f"plots/heatmap_4.png", bbox_inches="tight")
+    if slice_x == None:
+        slice_x = "auto"
+    plt.savefig(
+        f"plots/{run_number:03d}/cross_section__X={slice_x}__frequency_deviation.png",
+        bbox_inches="tight",
+    )
     plt.close()
 
 
@@ -551,7 +564,12 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    plt.savefig(f"plots/heatmap_3_λ.png", bbox_inches="tight")
+    if slice_y == None:
+        slice_y = "auto"
+    plt.savefig(
+        f"plots/{run_number:03d}/cross_section__Y={slice_y}__exponential_decay_constant.png",
+        bbox_inches="tight",
+    )
     plt.close()
 
 
@@ -589,7 +607,12 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    plt.savefig(f"plots/heatmap_4_λ.png", bbox_inches="tight")
+    if slice_x == None:
+        slice_x = "auto"
+    plt.savefig(
+        f"plots/{run_number:03d}/cross_section__X={slice_x}__exponential_decay_constant.png",
+        bbox_inches="tight",
+    )
     plt.close()
 
 
@@ -617,7 +640,9 @@ def plot_5(df, df_filtered, run_number):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    plt.savefig(f"plots/heatmap_5.png", bbox_inches="tight")
+    plt.savefig(
+        f"plots/{run_number:03d}/timeplot__frequency_deviation.png", bbox_inches="tight"
+    )
     plt.close()
 
 

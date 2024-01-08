@@ -3,7 +3,11 @@ import logging
 import argparse
 import h5py
 
-from config import DATA_STRUCTURED_DIRECTORY, DATA_DOWNLOAD_DIRECTORY, DATA_RAW_DIRECTORY
+from config import (
+    DATA_STRUCTURED_DIRECTORY,
+    DATA_DOWNLOAD_DIRECTORY,
+    DATA_RAW_DIRECTORY,
+)
 
 
 def main():
@@ -42,21 +46,22 @@ def main():
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
     for run_number in run_numbers:
-        
-        download_path = os.path.join(DATA_DOWNLOAD_DIRECTORY, f"run_{run_number:03d}.tar")
+        download_path = os.path.join(
+            DATA_DOWNLOAD_DIRECTORY, f"run_{run_number:03d}.tar"
+        )
         if not os.path.exists(download_path):
             logging.error(f"run_{run_number:03d}.tar file does not exist on disk.")
             continue
         else:
             logging.info(f"run_{run_number:03d} is available as .tar file")
-            
+
         raw_path = os.path.join(DATA_RAW_DIRECTORY, f"run_{run_number:03d}")
         if not os.path.exists(raw_path):
             logging.error(f"run_{run_number:03d} directory does not exist on disk.")
             continue
         else:
             logging.info(f"run_{run_number:03d} is available as unzipped raw files")
-        
+
         h5_path = os.path.join(DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5")
         if not os.path.exists(h5_path):
             logging.error(f"run_{run_number:03d}.h5 does not exist on disk.")
