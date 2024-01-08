@@ -35,6 +35,10 @@ The "data_structuring_2.py" script represents the second stage of data processin
 
 The "feature_extraction.py" script extracts features from transients stored in HDF5 files and saves the results as CSV files. It supports parallel processing of transients using Dask and requires the config module for data directories and various parameters, as well as the utils module for some utility functions. Users can specify run numbers as command-line arguments for selective feature extraction, or if not provided, features will be extracted for all runs found in the structured data directory. The script utilizes the process_transient function to extract features for individual transients, and the main entry point, main(), orchestrates the feature extraction process for specified or all runs, saving the results as CSV files in the features data directory. The script handles parallel processing using Dask, and the logging system provides information about the extraction process and any encountered warnings or errors.
 
+`model_isolationforest.py`
+
+The "model_isolationforest.py" script performs outlier detection on features extracted from SEFT (Single-Event Frequency Transient) transients using the Isolation Forest algorithm. The script reads features from a CSV file, filters the data based on specified X and Y ranges, and segments the dataframe into blocks for parallel processing. The processing pipeline applies the Isolation Forest model to identify outliers and inliers within each block. Additionally, the script includes functions for manual outlier injection, data interpolation for lost points, and the creation of visualizations like heatmaps and cross-section plots for SEFT transients. The resulting inliers are used to filter the original dataframe, and missing data points are interpolated from neighboring positions. Various plots, such as heatmaps of SEFT peak deviation, exponential decay constant (λ), 3D visualizations, and cross-section plots, provide insights into the distribution of outliers and inliers across different positions, aiding in the analysis of SEFT transients and the evaluation of the Isolation Forest model's performance.
+
 ## Processing flow
 
 1. First, download data from CERN servers using the `data_retrieval_download.py` script
@@ -43,3 +47,4 @@ The "feature_extraction.py" script extracts features from transients stored in H
 4. Next with `data_structuring_1.py` convert the raw unprocessed data to a consolidated .h5 file and add meta data
 5. Then using `data_structuring_2.py` calculate some baseline statistics for every transient in the runs and add them to the .h5 file
 6. Next use `feature_extraction.py` to calculate features for each transient and write them to a .csv file for further analysis
+7. Finally, use `model_isolationforest.py` to apply the outlier rejection process and to generate plots
