@@ -94,12 +94,15 @@ def main():
 
     # Plot heatmap
     logging.info("Plotting heatmap")
+    if not os.path.exists(f"plots/{run_number:03d}"):
+        os.mkdir(f"plots/{run_number:03d}")
+
     plot(df, df_filtered, run_number)
     plot_λ(df, df_filtered, run_number)
-    plot_3(df, df_filtered, run_number, 0)
-    plot_4(df, df_filtered, run_number, 0)
-    plot_3_λ(df, df_filtered, run_number, 0)
-    plot_4_λ(df, df_filtered, run_number, 0)
+    plot_3(df, df_filtered, run_number)
+    plot_4(df, df_filtered, run_number)
+    plot_3_λ(df, df_filtered, run_number)
+    plot_4_λ(df, df_filtered, run_number)
     # plot_5(df, df_filtered, run_number)
 
     logging.info("Done!")
@@ -454,6 +457,8 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
     if slice_y != None:
         df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
         df = df[df["y_um"].round(0) == slice_y]
+    else:
+        slice_y = "auto"
 
     df_filtered = df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
@@ -480,8 +485,6 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    if slice_y == None:
-        slice_y = "auto"
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__Y={slice_y}__frequency_deviation.png",
         bbox_inches="tight",
@@ -495,6 +498,8 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
     if slice_x != None:
         df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
         df = df[df["x_um"].round(0) == slice_x]
+    else:
+        slice_x = "auto"
 
     df_filtered = df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
@@ -521,8 +526,6 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    if slice_x == None:
-        slice_x = "auto"
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__X={slice_x}__frequency_deviation.png",
         bbox_inches="tight",
@@ -536,6 +539,8 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
     if slice_y != None:
         df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
         df = df[df["y_um"].round(0) == slice_y]
+    else:
+        slice_y = "auto"
 
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
@@ -564,8 +569,6 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    if slice_y == None:
-        slice_y = "auto"
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__Y={slice_y}__exponential_decay_constant.png",
         bbox_inches="tight",
@@ -579,6 +582,8 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
     if slice_x != None:
         df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
         df = df[df["x_um"].round(0) == slice_x]
+    else:
+        slice_x = "auto"
 
     df_filtered = (
         df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
@@ -607,8 +612,6 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
-    if slice_x == None:
-        slice_x = "auto"
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__X={slice_x}__exponential_decay_constant.png",
         bbox_inches="tight",
