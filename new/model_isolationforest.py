@@ -204,12 +204,14 @@ def isolation_forest(df: pd.DataFrame):
 
     # Set up Isolation Forest model
     clf = IsolationForest(
+        ndim=1,
         sample_size=None,
+        max_depth=8,
         ntrees=100,
-        ndim=2,
         missing_action="fail",
         scoring_metric="adj_depth",
         n_jobs=-1,
+        random_state=42
     )
 
     # Fit data on model and predict
