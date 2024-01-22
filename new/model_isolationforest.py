@@ -458,6 +458,10 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     axs[1].set_ylabel("Y position (µm)")
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
+    #TODO manual adjustment
+    if run_number == 26:
+        h1.set_clim(h1.get_clim()[0], 750)
+    
     h2.set_clim(h1.get_clim())
 
     plt.savefig(
