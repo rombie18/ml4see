@@ -17,6 +17,9 @@ from config import (
     BLOCK_OVERLAP,
 )
 
+# BLOCK_SIZE_X = 430
+# BLOCK_SIZE_Y = 430
+
 # Decision boundary for outlier score classification (outlier if score >= OUTLIER_BOUNDARY, inlier if score < OUTLIER_BOUNDARY)
 OUTLIER_BOUNDARY = 0.4
 
@@ -44,66 +47,112 @@ def main():
 
     # Initialise argument parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("run_number", type=int)
+    parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
     args = parser.parse_args()
-    run_number = args.run_number
 
-    # Combine labeled data with unlabeled extracted features
-    logging.debug("Reading features from csv")
-    df = pd.read_csv(os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"))
+    # Check if directories exist
+    if not os.path.exists(DATA_FEATURES_DIRECTORY):
+        logging.error(
+            f"The data features directory does not exist at {DATA_FEATURES_DIRECTORY}."
+        )
+        exit()
 
-    # Only retain specified area of interest
-    # TODO make this cleaner and maybe seperate function?
-    x_range = (-215, 215)
-    y_range = (-215, 215)
-    if x_range != None:
-        logging.debug(f"x_range present, limiting plot to {y_range}")
-        df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
+    # If runs are provided as arguments, only verify the specified runs
+    run_numbers = []
+    if len(args.run_numbers) > 0:
+        run_numbers = args.run_numbers
+        logging.info(
+            f"Runs argument present, only generating plots for: {run_numbers}"
+        )
+    else:
+        for file in os.listdir(DATA_FEATURES_DIRECTORY):
+            if file.endswith(".csv"):
+                run_numbers.append(int(file[4:7]))
+        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
-    if y_range != None:
-        logging.debug(f"y_range present, limiting plot to {y_range}")
-        df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
+    for run_number in run_numbers:
+        logging.info(f"Processing run {run_number:03d}")
 
-    # Segment dataframe into blocks and apply processing to each block
-    logging.info("Segmenting run into blocks")
-    # TODO make block size dynamic based on run resolution
-    blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
-    logging.info("Starting processing pipeline")
-    blocks_filtered = blocks.apply(processing_pipeline)
+        # Combine labeled data with unlabeled extracted features
+        logging.debug("Reading features from csv")
+        df = pd.read_csv(
+            os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
+        )
+        
+        #TODO Manual block size selection
+        if run_number in [11, 12, 14]:
+            BLOCK_SIZE_X = 20
+            BLOCK_SIZE_Y = 20
+        else:
+            BLOCK_SIZE_X = 5
+            BLOCK_SIZE_Y = 5
 
-    # Get transient ids of outliers and inliers
-    outliers, inliers = [], []
-    for block in blocks_filtered:
-        local_outliers, local_inliers = block
-        outliers.extend(local_outliers)
-        inliers.extend(local_inliers)
+        # Only retain specified area of interest
+        # TODO make this cleaner and maybe seperate function?
+        x_range = (-215, 215)
+        y_range = (-215, 215)
+        if x_range != None:
+            logging.debug(f"x_range present, limiting plot to {y_range}")
+            df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
 
-    # Filter dataframe based on inliers-only
-    df_filtered = df[df["transient"].isin(inliers)]
+        if y_range != None:
+            logging.debug(f"y_range present, limiting plot to {y_range}")
+            df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
 
-    # If all transients get rejected at one position, interpolate lost data from neighboring positions
-    logging.info("Interpolating missing data points from neighbors")
-    df_filtered = interpolate_lost_data(inliers, df_filtered, df)
+        # Segment dataframe into blocks and apply processing to each block
+        logging.info("Segmenting run into blocks")
+        # TODO make block size dynamic based on run resolution
+        blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
+        logging.info("Starting processing pipeline")
+        blocks_filtered = blocks.apply(processing_pipeline)
 
-    # TODO temp save processed transients to csv
-    # df_filtered = df_filtered.sort_values(by=["x_um"])
-    # df_filtered.to_csv(
-    #     f"run_processed_{run_number:03d}.csv",
-    #     index=False,
-    # )
+        # Get transient ids of outliers and inliers
+        outliers, inliers = [], []
+        for block in blocks_filtered:
+            local_outliers, local_inliers = block
+            outliers.extend(local_outliers)
+            inliers.extend(local_inliers)
 
-    # Plot heatmap
-    logging.info("Plotting heatmap")
-    if not os.path.exists(f"plots/{run_number:03d}"):
-        os.mkdir(f"plots/{run_number:03d}")
+        # Filter dataframe based on inliers-only
+        df_filtered = df[df["transient"].isin(inliers)]
 
-    plot(df, df_filtered, run_number)
-    plot_λ(df, df_filtered, run_number)
-    plot_3(df, df_filtered, run_number)
-    plot_4(df, df_filtered, run_number)
-    plot_3_λ(df, df_filtered, run_number)
-    plot_4_λ(df, df_filtered, run_number)
-    # plot_5(df, df_filtered, run_number)
+        # If all transients get rejected at one position, interpolate lost data from neighboring positions
+        logging.info("Interpolating missing data points from neighbors")
+        df_filtered = interpolate_lost_data(inliers, df_filtered, df)
+
+        # Convert to magnitude of frequency deviation (absolute value)
+        df["trig_val"] = df["trig_val"].abs()
+        df_filtered["trig_val"] = df_filtered["trig_val"].abs()
+
+        # Plot heatmap
+        logging.info("Plotting heatmap")
+        if not os.path.exists(f"plots/{run_number:03d}"):
+            os.mkdir(f"plots/{run_number:03d}")
+
+        plot(df, df_filtered, run_number)
+        plot_λ(df, df_filtered, run_number)
+        
+        # TODO manual parameter selections based on run numbers, improve this
+        if run_number in [11, 12]:
+            plot_3(df, df_filtered, run_number, None)
+            plot_3_λ(df, df_filtered, run_number, None)
+            plot_4(df, df_filtered, run_number, None)
+            plot_4_λ(df, df_filtered, run_number, None)
+        else:
+            plot_3(df, df_filtered, run_number, 0)
+            plot_3_λ(df, df_filtered, run_number, 0)
+            plot_4(df, df_filtered, run_number, 0)
+            plot_4_λ(df, df_filtered, run_number, 0)
+
+        # Display elementary metrics
+        outlier_percentage = len(outliers) / (len(inliers) + len(outliers)) * 100
+        print(f"----- RUN {run_number:03d} -----")
+        print(f"Number of outliers: {len(outliers)}")
+        print(f"Number of inliers: {len(inliers)}")
+        print(f"Outlier percentage: {outlier_percentage:.2f}%")
+        print("-------------------")
+
+        logging.info(f"Successfully processed run {run_number:03d}")
 
     logging.info("Done!")
 
@@ -202,6 +251,7 @@ def isolation_forest(df: pd.DataFrame):
     # Ignore annoying warnings
     warnings.filterwarnings("ignore")
 
+    # TODO move to pyod instead of isotree: https://pyod.readthedocs.io/
     # Set up Isolation Forest model
     clf = IsolationForest(
         ndim=1,
@@ -211,7 +261,7 @@ def isolation_forest(df: pd.DataFrame):
         missing_action="fail",
         scoring_metric="adj_depth",
         n_jobs=-1,
-        random_state=42
+        random_state=42,
     )
 
     # Fit data on model and predict
@@ -298,7 +348,6 @@ def do_interpolate(inliers, df, position, group, step_x, step_y):
 
 def plot(df, df_filtered, run_number):
     """Heatmap of fitted maximum frequency deviation (trig_val) in function to X and Y position"""
-    # TODO replace fitted frequency deviation by actual maximum deviation
 
     df_filtered_grouped = (
         df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
@@ -315,46 +364,41 @@ def plot(df, df_filtered, run_number):
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
     fig.tight_layout(w_pad=15)
 
-    h1 = sns.heatmap(
-        heatmap_filtered,
-        square=True,
-        cbar_kws={"label": "SEFT peak deviation (ppm)", "fraction": 0.046, "pad": 0.04},
-        cmap="jet",
-        ax=axs[0],
-    )
-    h2 = sns.heatmap(
-        heatmap,
-        square=True,
-        cbar_kws={"label": "SEFT peak deviation (ppm)", "fraction": 0.046, "pad": 0.04},
-        cmap="jet",
-        ax=axs[1],
+    im_extent = (
+        np.min(df_filtered["x_um"]),
+        np.max(df_filtered["x_um"]),
+        np.min(df_filtered["y_um"]),
+        np.max(df_filtered["y_um"]),
     )
 
-    # TODO ticks on axis in steps of 15 µm
+    h1 = axs[0].imshow(
+        heatmap_filtered,
+        origin="lower",
+        extent=im_extent,
+        cmap="jet",
+    )
+    cbar = plt.colorbar(h1, ax=axs[0], fraction=0.046, pad=0.04)
+    cbar.set_label("|SEFT peak deviation| (ppm)")
+
+    h2 = axs[1].imshow(
+        heatmap,
+        origin="lower",
+        extent=im_extent,
+        cmap="jet",
+    )
+    cbar = plt.colorbar(h2, ax=axs[1], fraction=0.046, pad=0.04)
+    cbar.set_label("|SEFT peak deviation| (ppm)")
+
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
-    axs[0].set_xlabel("Beam position X (µm)")
-    axs[0].set_ylabel("Beam position Y (µm)")
-    axs[0].set_xticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_xticklabels()]
-    )
-    axs[0].set_yticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_yticklabels()]
-    )
-    axs[0].invert_yaxis()
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("Y position (µm)")
 
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
-    axs[1].set_xlabel("Beam position X (µm)")
-    axs[1].set_ylabel("Beam position Y (µm)")
-    axs[1].set_xticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_xticklabels()]
-    )
-    axs[1].set_yticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_yticklabels()]
-    )
-    axs[1].invert_yaxis()
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("Y position (µm)")
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
-    h2.collections[0].set_clim(h1.collections[0].get_clim())
+    h2.set_clim(h1.get_clim())
 
     plt.savefig(
         f"plots/{run_number:03d}/heatmap__frequency_deviation.png", bbox_inches="tight"
@@ -380,54 +424,41 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     fig, axs = plt.subplots(1, 2, figsize=(20, 10))
     fig.tight_layout(w_pad=15)
 
-    h1 = sns.heatmap(
+    im_extent = (
+        np.min(df_filtered["x_um"]),
+        np.max(df_filtered["x_um"]),
+        np.min(df_filtered["y_um"]),
+        np.max(df_filtered["y_um"]),
+    )
+
+    h1 = axs[0].imshow(
         heatmap_filtered,
-        square=True,
-        cbar_kws={
-            "label": "Exponential decay constant (1/s)",
-            "fraction": 0.046,
-            "pad": 0.04,
-        },
+        origin="lower",
+        extent=im_extent,
         cmap="jet",
-        ax=axs[0],
-        # vmax=1000
     )
-    h2 = sns.heatmap(
+    cbar = plt.colorbar(h1, ax=axs[0], fraction=0.046, pad=0.04)
+    cbar.set_label("Exponential decay constant (1/s)")
+
+    h2 = axs[1].imshow(
         heatmap,
-        square=True,
-        cbar_kws={
-            "label": "Exponential decay constant (1/s)",
-            "fraction": 0.046,
-            "pad": 0.04,
-        },
+        origin="lower",
+        extent=im_extent,
         cmap="jet",
-        ax=axs[1],
     )
+    cbar = plt.colorbar(h2, ax=axs[1], fraction=0.046, pad=0.04)
+    cbar.set_label("Exponential decay constant (1/s)")
 
     axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
     axs[0].set_xlabel("X position (µm)")
     axs[0].set_ylabel("Y position (µm)")
-    axs[0].set_xticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_xticklabels()]
-    )
-    axs[0].set_yticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[0].get_yticklabels()]
-    )
-    axs[0].invert_yaxis()
 
     axs[1].set_title(f"No filtering (run_{run_number:03d})")
     axs[1].set_xlabel("X position (µm)")
     axs[1].set_ylabel("Y position (µm)")
-    axs[1].set_xticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_xticklabels()]
-    )
-    axs[1].set_yticklabels(
-        ["{:.0f}".format(float(t.get_text())) for t in axs[1].get_yticklabels()]
-    )
-    axs[1].invert_yaxis()
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
-    h2.collections[0].set_clim(h1.collections[0].get_clim())
+    h2.set_clim(h1.get_clim())
 
     plt.savefig(
         f"plots/{run_number:03d}/heatmap__exponential_decay_constant.png",
@@ -474,7 +505,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
     )
     axs[0].set_xlabel("X position (µm)")
-    axs[0].set_ylabel("SEFT peak deviation (ppm)")
+    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
@@ -483,7 +514,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
     )
     axs[1].set_xlabel("X position (µm)")
-    axs[1].set_ylabel("SEFT peak deviation (ppm)")
+    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
@@ -515,7 +546,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
     )
     axs[0].set_xlabel("Y position (µm)")
-    axs[0].set_ylabel("SEFT peak deviation (ppm)")
+    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
@@ -524,7 +555,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
     )
     axs[1].set_xlabel("Y position (µm)")
-    axs[1].set_ylabel("SEFT peak deviation (ppm)")
+    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
@@ -570,6 +601,11 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
     axs[1].set_ylabel("Exponential decay constant (1/s)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
+
+    # TODO temp manual override
+    if run_number == 26:
+        axs[0].set_ylim(top=750)
+        axs[1].set_ylim(top=750)
 
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__Y={slice_y}__exponential_decay_constant.png",
@@ -617,36 +653,6 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__X={slice_x}__exponential_decay_constant.png",
         bbox_inches="tight",
-    )
-    plt.close()
-
-
-def plot_5(df, df_filtered, run_number):
-    """Sensitivity loss in function of time"""
-    # TODO improve this plot
-
-    df_filtered = df_filtered.reset_index()
-    df = df.reset_index()
-
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
-    fig.tight_layout(w_pad=5)
-
-    axs[0].scatter(df_filtered["transient"], df_filtered["trig_val"], marker=".")
-    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
-    axs[0].set_xlabel("Transient ID")
-    axs[0].set_ylabel("SEFT peak deviation (ppm)")
-    axs[0].set_axisbelow(True)
-    axs[0].grid(color="lightgray")
-
-    axs[1].scatter(df["transient"], df["trig_val"], marker=".")
-    axs[1].set_title(f"No filtering (run_{run_number:03d})")
-    axs[1].set_xlabel("Transient ID")
-    axs[1].set_ylabel("SEFT peak deviation (ppm)")
-    axs[1].set_axisbelow(True)
-    axs[1].grid(color="lightgray")
-
-    plt.savefig(
-        f"plots/{run_number:03d}/timeplot__frequency_deviation.png", bbox_inches="tight"
     )
     plt.close()
 
