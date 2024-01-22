@@ -834,11 +834,6 @@ def plot_3_λ_multiple(runs_data, slice_y_glob=None):
             label=f"run {run_number:03d}",
         )
 
-        # TODO temp manual override
-        if run_number == 26:
-            axs[0].set_ylim(top=750)
-            axs[1].set_ylim(top=750)
-
     axs[0].set_title(
         f"SEFT exponential decay constant, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
     )
@@ -902,11 +897,6 @@ def plot_4_λ_multiple(runs_data, slice_x_glob=None):
             marker=".",
             label=f"run {run_number:03d}",
         )
-
-        # TODO temp manual override
-        if run_number == 26:
-            axs[0].set_ylim(top=750)
-            axs[1].set_ylim(top=750)
 
     axs[0].set_title(
         f"SEFT exponential decay constant, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
