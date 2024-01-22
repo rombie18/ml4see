@@ -61,14 +61,15 @@ def main():
     run_numbers = []
     if len(args.run_numbers) > 0:
         run_numbers = args.run_numbers
-        logging.info(
-            f"Runs argument present, only generating plots for: {run_numbers}"
-        )
+        logging.info(f"Runs argument present, only generating plots for: {run_numbers}")
     else:
         for file in os.listdir(DATA_FEATURES_DIRECTORY):
             if file.endswith(".csv"):
                 run_numbers.append(int(file[4:7]))
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
+
+    # TODO cleanup
+    runs_data = []
 
     for run_number in run_numbers:
         logging.info(f"Processing run {run_number:03d}")
@@ -78,8 +79,8 @@ def main():
         df = pd.read_csv(
             os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
         )
-        
-        #TODO Manual block size selection
+
+        # TODO Manual block size selection
         if run_number in [11, 12, 14]:
             BLOCK_SIZE_X = 20
             BLOCK_SIZE_Y = 20
@@ -124,6 +125,8 @@ def main():
         df["trig_val"] = df["trig_val"].abs()
         df_filtered["trig_val"] = df_filtered["trig_val"].abs()
 
+        runs_data.append((df, df_filtered, run_number))
+
         # Plot heatmap
         logging.info("Plotting heatmap")
         if not os.path.exists(f"plots/{run_number:03d}"):
@@ -131,7 +134,7 @@ def main():
 
         plot(df, df_filtered, run_number)
         plot_λ(df, df_filtered, run_number)
-        
+
         # TODO manual parameter selections based on run numbers, improve this
         if run_number in [11, 12]:
             plot_3(df, df_filtered, run_number, None)
@@ -153,6 +156,13 @@ def main():
         print("-------------------")
 
         logging.info(f"Successfully processed run {run_number:03d}")
+
+    # Combined plots if multiple runs specified
+    if len(run_numbers) > 1:
+        plot_3_multiple(runs_data, 0)
+        plot_3_λ_multiple(runs_data, 0)
+        plot_4_multiple(runs_data, 0)
+        plot_4_λ_multiple(runs_data, 0)
 
     logging.info("Done!")
 
@@ -458,10 +468,10 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     axs[1].set_ylabel("Y position (µm)")
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
-    #TODO manual adjustment
+    # TODO manual adjustment
     if run_number == 26:
         h1.set_clim(h1.get_clim()[0], 750)
-    
+
     h2.set_clim(h1.get_clim())
 
     plt.savefig(
@@ -656,6 +666,268 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
 
     plt.savefig(
         f"plots/{run_number:03d}/cross_section__X={slice_x}__exponential_decay_constant.png",
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def plot_3_multiple(runs_data, slice_y_glob=None):
+    """Cross section in X direction"""
+
+    run_numbers = list(map(lambda x: x[2], runs_data))
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    for run_data in runs_data:
+        df, df_filtered, run_number = run_data
+
+        slice_y = slice_y_glob
+        if slice_y != None:
+            df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
+            df = df[df["y_um"].round(0) == slice_y]
+        else:
+            slice_y = "auto"
+
+        df_filtered = (
+            df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
+        )
+
+        df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
+
+        axs[0].scatter(
+            df_filtered["x_um"],
+            df_filtered["trig_val"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+        axs[1].scatter(
+            df["x_um"],
+            df["trig_val"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+
+    axs[0].set_title(
+        f"SEFT peak frequency, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
+    )
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+    axs[0].legend()
+
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
+    )
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+    axs[1].legend()
+
+    plt.savefig(
+        f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__Y={slice_y}__frequency_deviation.png",
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def plot_4_multiple(runs_data, slice_x_glob=None):
+    """Cross section in Y direction"""
+
+    run_numbers = list(map(lambda x: x[2], runs_data))
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    for run_data in runs_data:
+        df, df_filtered, run_number = run_data
+
+        slice_x = slice_x_glob
+        if slice_x != None:
+            df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
+            df = df[df["x_um"].round(0) == slice_x]
+        else:
+            slice_x = "auto"
+
+        df_filtered = (
+            df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
+        )
+
+        df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
+
+        axs[0].scatter(
+            df_filtered["y_um"],
+            df_filtered["trig_val"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+        axs[1].scatter(
+            df["y_um"],
+            df["trig_val"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+
+    axs[0].set_title(
+        f"SEFT peak frequency, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
+    )
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+    axs[0].legend()
+
+    axs[1].set_title(
+        f"SEFT peak frequency, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
+    )
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+    axs[1].legend()
+
+    plt.savefig(
+        f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__X={slice_x}__frequency_deviation.png",
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def plot_3_λ_multiple(runs_data, slice_y_glob=None):
+    """Cross section in X direction"""
+
+    run_numbers = list(map(lambda x: x[2], runs_data))
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    for run_data in runs_data:
+        df, df_filtered, run_number = run_data
+
+        slice_y = slice_y_glob
+        if slice_y != None:
+            df_filtered = df_filtered[df_filtered["y_um"].round(0) == slice_y]
+            df = df[df["y_um"].round(0) == slice_y]
+        else:
+            slice_y = "auto"
+
+        df_filtered = (
+            df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
+            .mean()
+            .reset_index()
+        )
+
+        df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+
+        axs[0].scatter(
+            df_filtered["x_um"],
+            df_filtered["posttrig_exp_fit_λ"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+        axs[1].scatter(
+            df["x_um"],
+            df["posttrig_exp_fit_λ"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+
+        # TODO temp manual override
+        if run_number == 26:
+            axs[0].set_ylim(top=750)
+            axs[1].set_ylim(top=750)
+
+    axs[0].set_title(
+        f"SEFT exponential decay constant, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
+    )
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("Exponential decay constant (1/s)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+    axs[0].legend()
+
+    axs[1].set_title(
+        f"SEFT exponential decay constant, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
+    )
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("Exponential decay constant (1/s)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+    axs[1].legend()
+
+    plt.savefig(
+        f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__Y={slice_y}__exponential_decay_constant.png",
+        bbox_inches="tight",
+    )
+    plt.close()
+
+
+def plot_4_λ_multiple(runs_data, slice_x_glob=None):
+    """Cross section in Y direction"""
+
+    run_numbers = list(map(lambda x: x[2], runs_data))
+
+    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig.tight_layout(w_pad=5)
+
+    for run_data in runs_data:
+        df, df_filtered, run_number = run_data
+
+        slice_x = slice_x_glob
+        if slice_x != None:
+            df_filtered = df_filtered[df_filtered["x_um"].round(0) == slice_x]
+            df = df[df["x_um"].round(0) == slice_x]
+        else:
+            slice_x = "auto"
+
+        df_filtered = (
+            df_filtered.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"]
+            .mean()
+            .reset_index()
+        )
+
+        df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
+
+        axs[0].scatter(
+            df_filtered["y_um"],
+            df_filtered["posttrig_exp_fit_λ"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+        axs[1].scatter(
+            df["y_um"],
+            df["posttrig_exp_fit_λ"],
+            marker=".",
+            label=f"run {run_number:03d}",
+        )
+
+        # TODO temp manual override
+        if run_number == 26:
+            axs[0].set_ylim(top=750)
+            axs[1].set_ylim(top=750)
+
+    axs[0].set_title(
+        f"SEFT exponential decay constant, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
+    )
+    axs[0].set_xlabel("X position (µm)")
+    axs[0].set_ylabel("Exponential decay constant (1/s)")
+    axs[0].set_axisbelow(True)
+    axs[0].grid(color="lightgray")
+    axs[0].legend()
+
+    axs[1].set_title(
+        f"SEFT exponential decay constant, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
+    )
+    axs[1].set_xlabel("X position (µm)")
+    axs[1].set_ylabel("Exponential decay constant (1/s)")
+    axs[1].set_axisbelow(True)
+    axs[1].grid(color="lightgray")
+    axs[1].legend()
+
+    plt.savefig(
+        f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__X={slice_x}__exponential_decay_constant.png",
         bbox_inches="tight",
     )
     plt.close()
