@@ -678,6 +678,9 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
+    
+    run_name = ["Inductor A", "Inductor B"]
+    run_name_i = 0
 
     for run_data in runs_data:
         df, df_filtered, run_number = run_data
@@ -699,14 +702,16 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
             df_filtered["x_um"],
             df_filtered["trig_val"],
             marker=".",
-            label=f"run {run_number:03d}",
+            label=run_name[run_name_i],
         )
         axs[1].scatter(
             df["x_um"],
             df["trig_val"],
             marker=".",
-            label=f"run {run_number:03d}",
+            label=run_name[run_name_i],
         )
+        
+        run_name_i = run_name_i + 1
 
     axs[0].set_title(
         f"SEFT peak frequency, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
@@ -715,7 +720,7 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
     axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
-    axs[0].legend()
+    axs[0].legend(loc="lower center")
 
     axs[1].set_title(
         f"SEFT peak frequency, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
@@ -724,7 +729,7 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
     axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
-    axs[1].legend()
+    axs[1].legend(loc="lower center")
 
     plt.savefig(
         f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__Y={slice_y}__frequency_deviation.png",
@@ -802,7 +807,10 @@ def plot_3_λ_multiple(runs_data, slice_y_glob=None):
 
     fig, axs = plt.subplots(1, 2, figsize=(10, 5))
     fig.tight_layout(w_pad=5)
-
+    
+    run_name = ["Inductor A", "Inductor B"]
+    run_name_i = 0
+    
     for run_data in runs_data:
         df, df_filtered, run_number = run_data
 
@@ -825,14 +833,16 @@ def plot_3_λ_multiple(runs_data, slice_y_glob=None):
             df_filtered["x_um"],
             df_filtered["posttrig_exp_fit_λ"],
             marker=".",
-            label=f"run {run_number:03d}",
+            label=run_name[run_name_i],
         )
         axs[1].scatter(
             df["x_um"],
             df["posttrig_exp_fit_λ"],
             marker=".",
-            label=f"run {run_number:03d}",
+            label=run_name[run_name_i],
         )
+        
+        run_name_i = run_name_i + 1
 
     axs[0].set_title(
         f"SEFT exponential decay constant, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
@@ -841,7 +851,7 @@ def plot_3_λ_multiple(runs_data, slice_y_glob=None):
     axs[0].set_ylabel("Exponential decay constant (1/s)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
-    axs[0].legend()
+    axs[0].legend(loc="lower center")
 
     axs[1].set_title(
         f"SEFT exponential decay constant, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
@@ -850,7 +860,10 @@ def plot_3_λ_multiple(runs_data, slice_y_glob=None):
     axs[1].set_ylabel("Exponential decay constant (1/s)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
-    axs[1].legend()
+    axs[1].legend(loc="lower center")
+    
+    axs[0].set_ylim(top=790, bottom=-50)
+    axs[1].set_ylim(top=790, bottom=-50)
 
     plt.savefig(
         f"plots/{'-'.join([str(run_number) for run_number in run_numbers])}__cross_section__Y={slice_y}__exponential_decay_constant.png",
