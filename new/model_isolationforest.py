@@ -6,8 +6,8 @@ import pandas as pd
 import argparse
 import numpy as np
 import warnings
-from isotree import IsolationForest
 from multiprocessing import Pool
+from isotree import IsolationForest
 
 from config import (
     DATA_FEATURES_DIRECTORY,

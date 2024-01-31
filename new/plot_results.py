@@ -69,6 +69,9 @@ def main():
         if y_range != None:
             logging.debug(f"y_range present, limiting plot to {y_range}")
             df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
+            
+        # Convert to magnitude of frequency deviation (absolute value)
+        df["trig_val"] = df["trig_val"].abs()
 
         # Split data into in/outliers
         df_inliers = df.loc[df["type"] == "inlier"]
