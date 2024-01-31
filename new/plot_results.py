@@ -142,7 +142,7 @@ def plot(df, df_filtered, run_number):
         index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+    fig, axs = plt.subplots(1, 2, figsize=(15, 7.5))
     fig.tight_layout(w_pad=15)
 
     im_extent = (
@@ -202,7 +202,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
         index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(20, 10))
+    fig, axs = plt.subplots(1, 2, figsize=(15, 7.5))
     fig.tight_layout(w_pad=15)
 
     im_extent = (
