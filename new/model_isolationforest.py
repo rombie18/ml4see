@@ -23,9 +23,9 @@ OUTLIER_BOUNDARY = 0.4
 # Features to be used for outlier detection, any extreme or deviating values in these will likely result in outlier
 FEATURES = [
     "pretrig_std",
-    "trig_val",
-    "posttrig_std",
-    "posttrig_exp_fit_R2",
+    # "trig_val",
+    # "posttrig_std",
+    # "posttrig_exp_fit_R2",
     "posttrig_exp_fit_λ",
 ]
 
@@ -130,7 +130,7 @@ def processing_pipeline(df):
     dfi = inject_points(df)
 
     # Apply Isolation Forest model on selected features
-    y_pred = isolation_forest(dfi[FEATURES])
+    y_pred = isolation_forest(dfi)
 
     # Undo effect of manual outlier injection
     y_pred = y_pred[:-2]
@@ -238,10 +238,46 @@ def isolation_forest(df: pd.DataFrame):
     )
 
     # Fit data on model and predict
-    y_pred = clf.fit_predict(df)
+    clf.fit(df[FEATURES])
+    y_pred = clf.decision_function(df[FEATURES])
+    
+    outliers = []
+    inliers = []
+    
+    for i, point in enumerate(y_pred):
+        if point >= OUTLIER_BOUNDARY:
+            outliers.append(i)
+        if point < OUTLIER_BOUNDARY:
+            inliers.append(i)
 
     # Reactivate warnings
     warnings.filterwarnings("default")
+    
+    from sklearn.inspection import DecisionBoundaryDisplay
+
+    disp = DecisionBoundaryDisplay.from_estimator(
+        clf,
+        df[FEATURES],
+        response_method="predict",
+        alpha=0.5,
+    )
+    
+    disp.ax_.scatter(
+        df[FEATURES][df[FEATURES].columns[0]].iloc[inliers], df[FEATURES][df[FEATURES].columns[1]].iloc[inliers], s=30, edgecolor="k", color="limegreen", label="Inliers"
+    )
+    disp.ax_.scatter(
+        df[FEATURES][df[FEATURES].columns[0]].iloc[outliers], df[FEATURES][df[FEATURES].columns[1]].iloc[outliers], s=30, edgecolor="k", color="red", label="Outliers"
+    )
+    plt.title("Outlier score decision boundary of Isolation Forest")
+    plt.legend()
+    cbar = plt.colorbar(disp.ax_.collections[1])
+    cbar.set_label("Outlier score")
+    plt.savefig(f"test.png")
+    
+    df["outlier_score"] = y_pred
+    print(df.to_string())
+    
+    input()
 
     return y_pred
 

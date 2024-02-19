@@ -10,7 +10,7 @@ from config import (
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
     PRETRIG_GUARD_SAMPLES,
-    R2_THRESHOLD
+    R2_THRESHOLD,
 )
 from utils import moving_average, exponential_decay
 
@@ -45,17 +45,13 @@ with h5py.File(h5_path, "r") as h5file:
     baseline_freq = transient.attrs["baseline_freq_mean_hz"]
     x_lsb = transient.attrs["x_lsb"]
     y_lsb = transient.attrs["y_lsb"]
-    
+
     # Calculate true oscillator frequency for ppm error
     f0 = sdr_cf + baseline_freq
 
     # Construct time and frequency arrays, calculate the frequency error in ppm
-    tran_time = (
-        np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
-    )
-    tran_freq = (
-        np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
-    )
+    tran_time = np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
+    tran_freq = np.subtract(np.array(transient), baseline_freq) / f0 * 1e6
 
     # Construct pre-trigger baseline arrays
     tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
@@ -119,9 +115,7 @@ with h5py.File(h5_path, "r") as h5file:
             tran_posttrig_time_ds, *params
         )
         ss_res = np.sum(residuals**2)
-        ss_tot = np.sum(
-            (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
-        )
+        ss_tot = np.sum((tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2)
         r_squared = 1 - (ss_res / ss_tot)
 
         features["posttrig_exp_fit_R2"] = r_squared
@@ -148,35 +142,41 @@ with h5py.File(h5_path, "r") as h5file:
     print(features)
 
     # Plot results
-    figure, axis = plt.subplots(1, 1)
+    figure, axis = plt.subplots(1, 1, figsize=(5, 3))
 
-    axis.plot(tran_time, tran_freq, ".")
-    axis.plot(tran_pretrig_time_ds, tran_pretrig_freq_ds, color="orange", linestyle="-")
-    axis.plot(tran_posttrig_time_ds, tran_posttrig_freq_ds, color="orange", linestyle="-")
-
-    axis.axvline(
-        x=tran_pretrig_time[-1],
-        color="lime",
-        linestyle="--",
+    axis.plot(
+        np.append(tran_pretrig_time_ds, tran_posttrig_time_ds) * 1000,
+        np.append(tran_pretrig_freq_ds, tran_posttrig_freq_ds),
+        linestyle="-",
+        label="Transient response DUT",
+        color="dodgerblue",
+        linewidth=2
     )
 
     try:
         axis.plot(
-            tran_posttrig_time_ds,
+            tran_posttrig_time_ds * 1000,
             exponential_decay(tran_posttrig_time_ds, *params),
-            color="cyan",
+            linestyle="-",
+            label="Fitted exponential decay",
+            color="orange",
+             linewidth=1.7
         )
-        
-        axis.axhline(
-            y=tran_posttrig_freq_ds[0],
-            color="red",
-            linestyle=":",
-        )
-        
+
     except:
         pass
 
-    axis.set_title(f"Moving Average ({tran_name})")
+    axis.axhline(
+        y=tran_posttrig_freq_ds[0],
+        linestyle=":",
+        label="Peak deviation",
+        color="red"
+    )
+
+    axis.axvline(x=tran_pretrig_time[-1] * 1000, linestyle=":", label="Trigger", color="limegreen")
+
+    axis.set_title(f" ")
+    axis.legend()
 
     min = np.min([np.min(tran_pretrig_freq_ds), np.min(tran_posttrig_freq_ds)])
     min = min * 1.1
@@ -184,13 +184,14 @@ with h5py.File(h5_path, "r") as h5file:
     max = max * 1.1
     axis.set_ylim(min, max)
 
-    axis.set_xlabel("Time (s)")
-    axis.set_ylabel("Delta frequency (Hz)")
+    axis.set_xlabel("Time (ms)")
+    axis.set_ylabel("Instantaneous frequency error (ppm)")
+    
+    axis.grid()
 
     # Visualize window size
     # for point in time_data[::window_size]:
     #     axis.axvline(x = point, color = 'gray', label = 'axvline - full height', zorder=-1)
 
     # Set figure size and save
-    figure.set_size_inches(13.5, 7.5)
-    plt.savefig(f"plots/tran_{run_name}_{tran_name}.png")
+    plt.savefig(f"plots/tran_{run_name}_{tran_name}.png", bbox_inches='tight')

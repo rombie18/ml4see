@@ -5,6 +5,9 @@ import pandas as pd
 import argparse
 import numpy as np
 import seaborn as sns
+from sklearn.metrics import mean_squared_error
+import matplotlib.ticker as ticker
+
 
 from config import (
     DATA_PROCESSED_DIRECTORY,
@@ -27,6 +30,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
     args = parser.parse_args()
+    
+    pd.set_option('display.max_rows', 100)
 
     # Check if directories exist
     if not os.path.exists(DATA_PROCESSED_DIRECTORY):
@@ -69,14 +74,14 @@ def main():
         if y_range != None:
             logging.debug(f"y_range present, limiting plot to {y_range}")
             df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
-            
+
         # Convert to magnitude of frequency deviation (absolute value)
         df["trig_val"] = df["trig_val"].abs()
 
         # Split data into in/outliers
         df_inliers = df.loc[df["type"] == "inlier"]
         df_outliers = df.loc[df["type"] == "outlier"]
-
+        
         runs_data.append((df, df_inliers, run_number))
 
         # Plot heatmap
@@ -85,28 +90,75 @@ def main():
             os.mkdir(f"plots/{run_number:03d}")
 
         plot(df, df_inliers, run_number)
-        plot_λ(df, df_inliers, run_number)
+        # plot_λ(df, df_inliers, run_number)
+
+        x_zoom_range = (-140, -90)
+        y_zoom_range = (-170, -120)
+        plot_zoom(df, df_inliers, run_number, x_zoom_range, y_zoom_range)
 
         # TODO manual parameter selections based on run numbers, improve this
-        if run_number in [11, 12]:
-            plot_3(df, df_inliers, run_number, None)
-            plot_3_λ(df, df_inliers, run_number, None)
-            plot_4(df, df_inliers, run_number, None)
-            plot_4_λ(df, df_inliers, run_number, None)
-        else:
-            plot_3(df, df_inliers, run_number, 0)
-            plot_3_λ(df, df_inliers, run_number, 0)
-            plot_4(df, df_inliers, run_number, 0)
-            plot_4_λ(df, df_inliers, run_number, 0)
+        # if run_number in [11, 12]:
+        #     plot_3(df, df_inliers, run_number, None)
+        #     plot_3_λ(df, df_inliers, run_number, None)
+        #     plot_4(df, df_inliers, run_number, None)
+        #     plot_4_λ(df, df_inliers, run_number, None)
+        # else:
+        #     plot_3(df, df_inliers, run_number, 0)
+        #     plot_3_λ(df, df_inliers, run_number, 0)
+        #     plot_4(df, df_inliers, run_number, 0)
+        #     plot_4_λ(df, df_inliers, run_number, 0)
 
         # Display elementary metrics
         outlier_percentage = (
             len(df_outliers) / (len(df_inliers) + len(df_outliers)) * 100
         )
+
+        metrics = {}
+        blocks = df.groupby(["block_x", "block_y"])
+        for position, block in blocks:
+            ptp = np.ptp(block["trig_val"])
+            metrics[position] = ptp
+
+        metrics_filtered = {}
+        blocks_filtered = df_inliers.groupby(["block_x", "block_y"])
+        for position, block in blocks_filtered:
+            ptp = np.ptp(block["trig_val"])
+            metrics_filtered[position] = ptp
+
+        X, Y = zip(*metrics.keys())
+        plt.scatter(X, Y, c=list(metrics.values()), cmap="viridis", s=100, marker="s")
+        cbar1 = plt.colorbar(label="Peak-to-peak (ppm)", fraction=0.046, pad=0.04)
+        plt.title(f"No filtering (run_{run_number:03d})")
+        plt.xlabel("X position (µm)")
+        plt.ylabel("Y position (µm)")
+        plt.gca().set_aspect("equal", adjustable="box")
+        plt.savefig(f"test1.png", bbox_inches="tight")
+        plt.close()
+
+        X, Y = zip(*metrics_filtered.keys())
+        plt.scatter(
+            X, Y, c=list(metrics_filtered.values()), cmap="viridis", s=100, marker="s"
+        )
+        cbar2 = plt.colorbar(label="Peak-to-peak (ppm)", fraction=0.046, pad=0.04)
+        cbar2.mappable.set_clim(cbar1.mappable.get_clim())
+        plt.title(f"With outliers filtered (run_{run_number:03d})")
+        plt.xlabel("X position (µm)")
+        plt.ylabel("Y position (µm)")
+        plt.gca().set_aspect("equal", adjustable="box")
+        plt.savefig(f"test2.png", bbox_inches="tight")
+        plt.close()
+
+        ptps = list(metrics.values())
+        ptps_filtered = list(metrics_filtered.values())
+
         print(f"----- RUN {run_number:03d} -----")
         print(f"Number of outliers: {len(df_outliers)}")
         print(f"Number of inliers: {len(df_inliers)}")
         print(f"Outlier percentage: {outlier_percentage:.2f}%")
+        print(f"Mean peak-to-peak original: {np.mean(ptps)}")
+        print(f"Mean peak-to-peak filtered: {np.mean(ptps_filtered)}")
+        print(f"Metric original: {np.mean(ptps) / np.mean(df['trig_val'])}")
+        print(f"Metric filtered: {np.mean(ptps_filtered) / np.mean(df['trig_val'])}")
         print("-------------------")
 
         logging.info(f"Successfully processed run {run_number:03d}")
@@ -142,8 +194,8 @@ def plot(df, df_filtered, run_number):
         index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(15, 7.5))
-    fig.tight_layout(w_pad=15)
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig.tight_layout(w_pad=10)
 
     im_extent = (
         np.min(df_filtered["x_um"]),
@@ -153,36 +205,100 @@ def plot(df, df_filtered, run_number):
     )
 
     h1 = axs[0].imshow(
-        heatmap_filtered,
-        origin="lower",
-        extent=im_extent,
-        cmap="jet",
-    )
-    cbar = plt.colorbar(h1, ax=axs[0], fraction=0.046, pad=0.04)
-    cbar.set_label("|SEFT peak deviation| (ppm)")
-
-    h2 = axs[1].imshow(
         heatmap,
         origin="lower",
         extent=im_extent,
         cmap="jet",
     )
-    cbar = plt.colorbar(h2, ax=axs[1], fraction=0.046, pad=0.04)
-    cbar.set_label("|SEFT peak deviation| (ppm)")
+    cbar = plt.colorbar(h1, ax=axs[0], fraction=0.046, pad=0.04)
+    cbar.set_label("Instantaneous frequency error (ppm)")
 
-    axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    h2 = axs[1].imshow(
+        heatmap_filtered,
+        origin="lower",
+        extent=im_extent,
+        cmap="jet",
+    )
+    cbar = plt.colorbar(h2, ax=axs[1], fraction=0.046, pad=0.04)
+    cbar.set_label("Instantaneous frequency error (ppm)")
+
+    # axs[0].set_title(f"With outliers filtered (run_{run_number:03d})")
+    # axs[0].set_title(f"With interpolation")
     axs[0].set_xlabel("X position (µm)")
     axs[0].set_ylabel("Y position (µm)")
 
-    axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    # axs[1].set_title(f"No filtering (run_{run_number:03d})")
+    # axs[1].set_title(f"Without interpolation")
     axs[1].set_xlabel("X position (µm)")
     axs[1].set_ylabel("Y position (µm)")
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
-    h2.set_clim(h1.get_clim())
+    h1.set_clim(h2.get_clim())
 
     plt.savefig(
         f"plots/{run_number:03d}/heatmap__frequency_deviation.png", bbox_inches="tight"
+    )
+    plt.close()
+
+
+def plot_zoom(df, df_filtered, run_number, x_zoom_range, y_zoom_range):
+    """Heatmap of fitted maximum frequency deviation (trig_val) in function to X and Y position"""
+
+    df_filtered_grouped = (
+        df_filtered.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
+    )
+    heatmap_filtered = df_filtered_grouped.pivot(
+        index="x_um", columns="y_um", values="trig_val"
+    ).transpose()
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    fig.tight_layout(w_pad=10)
+
+    im_extent = (
+        np.min(df_filtered["x_um"]),
+        np.max(df_filtered["x_um"]),
+        np.min(df_filtered["y_um"]),
+        np.max(df_filtered["y_um"]),
+    )
+
+    h1 = ax.imshow(
+        heatmap_filtered,
+        origin="lower",
+        extent=im_extent,
+        cmap="jet",
+    )
+    cbar = plt.colorbar(h1, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Instantaneous frequency error (ppm)")
+
+    # ax.set_title(f"With outliers filtered")
+    ax.set_xlabel("X position (µm)")
+    ax.set_ylabel("Y position (µm)")
+
+    axins = ax.inset_axes(
+        [0.4, 0.4, 0.45, 0.45],
+        xlim=x_zoom_range,
+        ylim=y_zoom_range,
+        xticklabels=[],
+        yticklabels=[]
+    )
+    
+    axins.xaxis.set_major_locator(ticker.MultipleLocator(20))
+    axins.yaxis.set_major_locator(ticker.MultipleLocator(20))
+    axins.xaxis.set_minor_locator(ticker.MultipleLocator(5))
+    axins.yaxis.set_minor_locator(ticker.MultipleLocator(5))
+    axins.xaxis.set_major_formatter(ax.xaxis.get_major_formatter())
+    axins.yaxis.set_major_formatter(ax.yaxis.get_major_formatter())
+    axins.tick_params(axis='both', which='major', labelsize=8)
+
+    axins.set_title("Segmented blocks", fontsize=10)
+    axins.grid(True, linestyle='-', linewidth=0.5, color='black', which='both')
+    
+    axins.imshow(heatmap_filtered, extent=im_extent, origin="lower", cmap="jet")
+    ax.indicate_inset_zoom(axins, edgecolor="black")
+
+    plt.savefig(
+        f"plots/{run_number:03d}/heatmap_zoomed__frequency_deviation.png",
+        bbox_inches="tight",
     )
     plt.close()
 
@@ -202,8 +318,8 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
         index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(15, 7.5))
-    fig.tight_layout(w_pad=15)
+    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig.tight_layout(w_pad=10)
 
     im_extent = (
         np.min(df_filtered["x_um"]),
@@ -290,7 +406,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; Y = {slice_y} µm"
     )
     axs[0].set_xlabel("X position (µm)")
-    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_ylabel("Instantaneous frequency error (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
@@ -299,7 +415,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; Y = {slice_y} µm"
     )
     axs[1].set_xlabel("X position (µm)")
-    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_ylabel("Instantaneous frequency error (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
@@ -331,7 +447,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         f"SEFT peak frequency, with outliers filtered \n Run {run_number:03d}; X = {slice_x} µm"
     )
     axs[0].set_xlabel("Y position (µm)")
-    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_ylabel("Instantaneous frequency error (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
 
@@ -340,7 +456,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
         f"SEFT peak frequency, no filtering \n Run {run_number:03d}; X = {slice_x} µm"
     )
     axs[1].set_xlabel("Y position (µm)")
-    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_ylabel("Instantaneous frequency error (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
 
@@ -488,7 +604,7 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
         f"SEFT peak frequency, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
     )
     axs[0].set_xlabel("X position (µm)")
-    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_ylabel("Instantaneous frequency error (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
     axs[0].legend(loc="lower center")
@@ -497,7 +613,7 @@ def plot_3_multiple(runs_data, slice_y_glob=None):
         f"SEFT peak frequency, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; Y = {slice_y} µm"
     )
     axs[1].set_xlabel("X position (µm)")
-    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_ylabel("Instantaneous frequency error (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
     axs[1].legend(loc="lower center")
@@ -550,7 +666,7 @@ def plot_4_multiple(runs_data, slice_x_glob=None):
         f"SEFT peak frequency, with outliers filtered \n Run {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
     )
     axs[0].set_xlabel("X position (µm)")
-    axs[0].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[0].set_ylabel("Instantaneous frequency error (ppm)")
     axs[0].set_axisbelow(True)
     axs[0].grid(color="lightgray")
     axs[0].legend()
@@ -559,7 +675,7 @@ def plot_4_multiple(runs_data, slice_x_glob=None):
         f"SEFT peak frequency, no filtering \n Runs {', '.join([str(run_number) for run_number in run_numbers])}; X = {slice_x} µm"
     )
     axs[1].set_xlabel("X position (µm)")
-    axs[1].set_ylabel("|SEFT peak deviation| (ppm)")
+    axs[1].set_ylabel("Instantaneous frequency error (ppm)")
     axs[1].set_axisbelow(True)
     axs[1].grid(color="lightgray")
     axs[1].legend()
