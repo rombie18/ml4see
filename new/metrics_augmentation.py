@@ -21,10 +21,10 @@ TIME_STOP = 10e-3
 
 SCAN_X_START = -180
 SCAN_X_STOP = 180
-SCAN_X_STEPS = 41  # 181
+SCAN_X_STEPS = 181
 SCAN_Y_START = -180
 SCAN_Y_STOP = 180
-SCAN_Y_STEPS = 41  # 181
+SCAN_Y_STEPS = 181
 SCAN_HITS_PER_STEP = 1
 SCAN_X_LSB_PER_UM = 99
 SCAN_Y_LSB_PER_UM = 93.46
@@ -179,7 +179,8 @@ def init_file(run_number):
         # add run metadata
         logging.debug("Adding metadata...")
         meta_ds = h5file.create_dataset("meta", dtype="f")
-        meta_ds.attrs.create("run_id", run_number)
+        meta_ds.attrs.create("scan_x_lsb_per_um", SCAN_X_LSB_PER_UM)
+        meta_ds.attrs.create("scan_y_lsb_per_um", SCAN_Y_LSB_PER_UM)
 
         sdr_group = h5file.create_group("sdr_data")
         # add SDR-related metadata

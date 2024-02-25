@@ -45,6 +45,7 @@ def main():
     # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
+    parser.add_argument("--synthetic", "--syn", action="store_true")
     args = parser.parse_args()
 
     # Check if directories exist
@@ -72,51 +73,100 @@ def main():
                 run_numbers.append(int(file[4:7]))
         logging.info(f"No runs specified, running on all available runs: {run_numbers}")
 
-    for run_number in run_numbers:
-        logging.info(f"Processing run {run_number:03d}")
+    # If synthetic flag is present, run different sequence
+    if not args.synthetic:
+        for run_number in run_numbers:
+            logging.info(f"Processing run {run_number:03d}")
 
-        # Combine labeled data with unlabeled extracted features
-        logging.debug("Reading features from csv")
-        df = pd.read_csv(
-            os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
-        )
+            # Combine labeled data with unlabeled extracted features
+            logging.debug("Reading features from csv")
+            df = pd.read_csv(
+                os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv")
+            )
 
-        # Segment dataframe into blocks and apply processing to each block
-        logging.info("Segmenting run into blocks")
-        # TODO make block size dynamic based on run resolution
-        blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
-        logging.info("Starting processing pipeline")
-        blocks_filtered = blocks.apply(processing_pipeline)
+            # Segment dataframe into blocks and apply processing to each block
+            logging.info("Segmenting run into blocks")
+            # TODO make block size dynamic based on run resolution
+            blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
+            logging.info("Starting processing pipeline")
+            blocks_filtered = blocks.apply(processing_pipeline)
 
-        # Get transient ids of outliers and inliers
-        outliers, inliers = [], []
-        for block in blocks_filtered:
-            local_outliers, local_inliers = block
-            outliers.extend(local_outliers)
-            inliers.extend(local_inliers)
+            # Get transient ids of outliers and inliers
+            outliers, inliers = [], []
+            for block in blocks_filtered:
+                local_outliers, local_inliers = block
+                outliers.extend(local_outliers)
+                inliers.extend(local_inliers)
 
-        # Anotate dataframes with inliers/outlier type
-        df_inliers = df[df["transient"].isin(inliers)]
-        df_inliers.insert(loc=1, column="type", value="inlier")
-        df_outliers = df[df["transient"].isin(outliers)]
-        df_outliers.insert(loc=1, column="type", value="outlier")
+            # Anotate dataframes with inliers/outlier type
+            df_inliers = df[df["transient"].isin(inliers)]
+            df_inliers.insert(loc=1, column="type", value="inlier")
+            df_outliers = df[df["transient"].isin(outliers)]
+            df_outliers.insert(loc=1, column="type", value="outlier")
 
-        # If all transients get rejected at one position, interpolate lost data from neighboring positions
-        logging.info("Interpolating missing data points from neighbors")
-        df_inliers = interpolate_lost_data(inliers, df_inliers, df)
+            # If all transients get rejected at one position, interpolate lost data from neighboring positions
+            logging.info("Interpolating missing data points from neighbors")
+            df_inliers = interpolate_lost_data(inliers, df_inliers, df)
 
-        # Merge inlier/outlier data into single frame
-        df = pd.concat([df_inliers, df_outliers], ignore_index=True)
-        df = df.sort_values(["transient"])
+            # Merge inlier/outlier data into single frame
+            df = pd.concat([df_inliers, df_outliers], ignore_index=True)
+            df = df.sort_values(["transient"])
 
-        # Save processed data to csv file
-        logging.debug(f"Storing processed data in file run_{run_number:03d}.csv")
-        df.to_csv(
-            os.path.join(DATA_PROCESSED_DIRECTORY, f"run_{run_number:03d}.csv"),
-            index=False,
-        )
+            # Save processed data to csv file
+            logging.debug(f"Storing processed data in file run_{run_number:03d}.csv")
+            df.to_csv(
+                os.path.join(DATA_PROCESSED_DIRECTORY, f"run_{run_number:03d}.csv"),
+                index=False,
+            )
 
-        logging.info(f"Successfully processed run {run_number:03d}")
+            logging.info(f"Successfully processed run {run_number:03d}")
+
+    else:
+        for syn_number in run_numbers:
+            logging.info(f"Processing synthetic run {syn_number:03d}")
+
+            # Combine labeled data with unlabeled extracted features
+            logging.debug("Reading features from csv")
+            df = pd.read_csv(
+                os.path.join(DATA_FEATURES_DIRECTORY, f"syn_{syn_number:03d}.csv")
+            )
+
+            # Segment dataframe into blocks and apply processing to each block
+            logging.info("Segmenting synthetic run into blocks")
+            # TODO make block size dynamic based on run resolution
+            blocks = segment_dataframe(df, BLOCK_SIZE_X, BLOCK_SIZE_Y, BLOCK_OVERLAP)
+            logging.info("Starting processing pipeline")
+            blocks_filtered = blocks.apply(processing_pipeline)
+
+            # Get transient ids of outliers and inliers
+            outliers, inliers = [], []
+            for block in blocks_filtered:
+                local_outliers, local_inliers = block
+                outliers.extend(local_outliers)
+                inliers.extend(local_inliers)
+
+            # Anotate dataframes with inliers/outlier type
+            df_inliers = df[df["transient"].isin(inliers)]
+            df_inliers.insert(loc=1, column="type", value="inlier")
+            df_outliers = df[df["transient"].isin(outliers)]
+            df_outliers.insert(loc=1, column="type", value="outlier")
+
+            # If all transients get rejected at one position, interpolate lost data from neighboring positions
+            logging.info("Interpolating missing data points from neighbors")
+            df_inliers = interpolate_lost_data(inliers, df_inliers, df)
+
+            # Merge inlier/outlier data into single frame
+            df = pd.concat([df_inliers, df_outliers], ignore_index=True)
+            df = df.sort_values(["transient"])
+
+            # Save processed data to csv file
+            logging.debug(f"Storing processed data in file syn_{syn_number:03d}.csv")
+            df.to_csv(
+                os.path.join(DATA_PROCESSED_DIRECTORY, f"syn_{syn_number:03d}.csv"),
+                index=False,
+            )
+
+            logging.info(f"Successfully processed synthetic run {syn_number:03d}")
 
     logging.info("Done!")
 
@@ -130,7 +180,7 @@ def processing_pipeline(df):
     dfi = inject_points(df)
 
     # Apply Isolation Forest model on selected features
-    y_pred = isolation_forest(dfi)
+    y_pred = isolation_forest(dfi[FEATURES])
 
     # Undo effect of manual outlier injection
     y_pred = y_pred[:-2]
@@ -238,46 +288,10 @@ def isolation_forest(df: pd.DataFrame):
     )
 
     # Fit data on model and predict
-    clf.fit(df[FEATURES])
-    y_pred = clf.decision_function(df[FEATURES])
-    
-    outliers = []
-    inliers = []
-    
-    for i, point in enumerate(y_pred):
-        if point >= OUTLIER_BOUNDARY:
-            outliers.append(i)
-        if point < OUTLIER_BOUNDARY:
-            inliers.append(i)
+    y_pred = clf.fit_predict(df)
 
     # Reactivate warnings
     warnings.filterwarnings("default")
-    
-    from sklearn.inspection import DecisionBoundaryDisplay
-
-    disp = DecisionBoundaryDisplay.from_estimator(
-        clf,
-        df[FEATURES],
-        response_method="predict",
-        alpha=0.5,
-    )
-    
-    disp.ax_.scatter(
-        df[FEATURES][df[FEATURES].columns[0]].iloc[inliers], df[FEATURES][df[FEATURES].columns[1]].iloc[inliers], s=30, edgecolor="k", color="limegreen", label="Inliers"
-    )
-    disp.ax_.scatter(
-        df[FEATURES][df[FEATURES].columns[0]].iloc[outliers], df[FEATURES][df[FEATURES].columns[1]].iloc[outliers], s=30, edgecolor="k", color="red", label="Outliers"
-    )
-    plt.title("Outlier score decision boundary of Isolation Forest")
-    plt.legend()
-    cbar = plt.colorbar(disp.ax_.collections[1])
-    cbar.set_label("Outlier score")
-    plt.savefig(f"test.png")
-    
-    df["outlier_score"] = y_pred
-    print(df.to_string())
-    
-    input()
 
     return y_pred
 

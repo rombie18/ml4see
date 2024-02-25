@@ -10,6 +10,7 @@ from multiprocessing import Pool
 from config import (
     DATA_STRUCTURED_DIRECTORY,
     DATA_FEATURES_DIRECTORY,
+    DATA_SYNTHETIC_DIRECTORY,
     WINDOW_SIZE,
     DOWNSAMPLE_FACTOR,
     PRETRIG_GUARD_SAMPLES,
@@ -33,65 +34,126 @@ def main():
     # Initialise argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("run_numbers", metavar="run_number", nargs="*", type=int)
+    parser.add_argument("--synthetic", "--syn", action="store_true")
     args = parser.parse_args()
 
-    # Check if directories exist
-    if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
-        logging.error(
-            f"The structured data directory does not exist at {DATA_STRUCTURED_DIRECTORY}."
-        )
-        exit()
-    if not os.path.exists(DATA_FEATURES_DIRECTORY):
-        logging.error(
-            f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}."
-        )
-        exit()
-
-    # If runs are provided as arguments, only verify the specified runs
-    run_numbers = []
-    if len(args.run_numbers) > 0:
-        run_numbers = args.run_numbers
-        logging.info(
-            f"Runs argument present, only extracting features of: {run_numbers}"
-        )
-    else:
-        for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
-            if file.endswith(".h5"):
-                run_numbers.append(int(file[4:7]))
-        logging.info(f"No runs specified, running on all available runs: {run_numbers}")
-
-    with Pool() as pool:
-        for run_number in run_numbers:
-            logging.info(f"Processing run {run_number:03d}")
-
-            # Combine data directory with provided run number to open .h5 file in read mode
-            h5_path = os.path.join(
-                DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5"
+    # If synthetic flag is present, run different sequence
+    if not args.synthetic:
+        # Check if directories exist
+        if not os.path.exists(DATA_STRUCTURED_DIRECTORY):
+            logging.error(
+                f"The structured data directory does not exist at {DATA_STRUCTURED_DIRECTORY}."
             )
-            with h5py.File(h5_path, "r") as h5file:
-                # Check if file is up to required processing stage
-                require_processing_stage(h5file, 2, strict=True)
+            exit()
+        if not os.path.exists(DATA_FEATURES_DIRECTORY):
+            logging.error(
+                f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}."
+            )
+            exit()
 
-                # Get transients from h5 file
-                transients = h5file["sdr_data"]["all"]
+        # If runs are provided as arguments, only verify the specified runs
+        run_numbers = []
+        if len(args.run_numbers) > 0:
+            run_numbers = args.run_numbers
+            logging.info(
+                f"Runs argument present, only extracting features of: {run_numbers}"
+            )
+        else:
+            for file in os.listdir(DATA_STRUCTURED_DIRECTORY):
+                if file.endswith(".h5"):
+                    run_numbers.append(int(file[4:7]))
+            logging.info(
+                f"No runs specified, running on all available runs: {run_numbers}"
+            )
 
-                transient_args = [
-                    (h5_path, tran_name) for tran_name in transients.keys()
-                ]
-                features_list = pool.map(process_transient_args, transient_args)
+        with Pool() as pool:
+            for run_number in run_numbers:
+                logging.info(f"Processing run {run_number:03d}")
 
-                features = pd.concat(features_list, ignore_index=True)
-
-                # Save extracted features to csv file
-                logging.debug(
-                    f"Storing extracted features in file run_{run_number:03d}.csv"
+                # Combine data directory with provided run number to open .h5 file in read mode
+                h5_path = os.path.join(
+                    DATA_STRUCTURED_DIRECTORY, f"run_{run_number:03d}.h5"
                 )
-                features.to_csv(
-                    os.path.join(DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"),
-                    index=False,
-                )
+                with h5py.File(h5_path, "r") as h5file:
+                    # Check if file is up to required processing stage
+                    require_processing_stage(h5file, 2, strict=True)
 
-            logging.info(f"Successfully processed run {run_number:03d}")
+                    # Get transients from h5 file
+                    transients = h5file["sdr_data"]["all"]
+
+                    transient_args = [
+                        (h5_path, tran_name) for tran_name in transients.keys()
+                    ]
+                    features_list = pool.map(process_transient_args, transient_args)
+
+                    features = pd.concat(features_list, ignore_index=True)
+
+                    # Save extracted features to csv file
+                    logging.debug(
+                        f"Storing extracted features in file run_{run_number:03d}.csv"
+                    )
+                    features.to_csv(
+                        os.path.join(
+                            DATA_FEATURES_DIRECTORY, f"run_{run_number:03d}.csv"
+                        ),
+                        index=False,
+                    )
+
+                logging.info(f"Successfully processed run {run_number:03d}")
+
+    else:
+        logging.warning("Processing features for SYNTHETIC run")
+
+        syn_numbers = args.run_numbers
+
+        # Check if directories exist
+        if not os.path.exists(DATA_FEATURES_DIRECTORY):
+            logging.error(
+                f"The features data directory does not exist at {DATA_FEATURES_DIRECTORY}."
+            )
+            exit()
+        if not os.path.exists(DATA_SYNTHETIC_DIRECTORY):
+            logging.error(
+                f"The synthetic data directory does not exist at {DATA_SYNTHETIC_DIRECTORY}."
+            )
+            exit()
+
+        with Pool() as pool:
+            for syn_number in syn_numbers:
+                logging.info(f"Processing synthetic run {syn_number:03d}")
+
+                # Combine data directory with provided run number to open .h5 file in read mode
+                h5_path = os.path.join(
+                    DATA_SYNTHETIC_DIRECTORY, f"syn_{syn_number:03d}.h5"
+                )
+                with h5py.File(h5_path, "r") as h5file:
+                    # Check if file is up to required processing stage
+                    require_processing_stage(h5file, 2, strict=True)
+
+                    # Get transients from h5 file
+                    transients = h5file["sdr_data"]["all"]
+
+                    transient_args = [
+                        (h5_path, tran_name) for tran_name in transients.keys()
+                    ]
+                    features_list = pool.map(
+                        process_synthetic_transient_args, transient_args
+                    )
+
+                    features = pd.concat(features_list, ignore_index=True)
+
+                    # Save extracted features to csv file
+                    logging.debug(
+                        f"Storing extracted features in file syn_{syn_number:03d}.csv"
+                    )
+                    features.to_csv(
+                        os.path.join(
+                            DATA_FEATURES_DIRECTORY, f"syn_{syn_number:03d}.csv"
+                        ),
+                        index=False,
+                    )
+
+                logging.info(f"Successfully processed synthetic run {syn_number:03d}")
 
     logging.info("Done!")
 
@@ -226,6 +288,11 @@ def process_transient(h5_path, tran_name):
         df = pd.DataFrame(features, index=[0])
 
         return df
+
+
+def process_synthetic_transient_args(args):
+    h5_path, tran_name = args
+    return process_synthetic_transient(h5_path, tran_name)
 
 
 def process_synthetic_transient(h5_path, tran_name):
