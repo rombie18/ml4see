@@ -31,3 +31,4 @@ DATA_STRUCTURED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/st
 DATA_FEATURES_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/features"
 DATA_PROCESSED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/processed"
 DATA_LABELED_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/labeled"
+DATA_SYNTHETIC_DIRECTORY = "/home/r0835817/2023-WoutRombouts-NoCsBack/ml4see/synthetic"

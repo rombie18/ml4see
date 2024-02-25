@@ -8,7 +8,8 @@ from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 
 from config import RUN_LOGBOOK_PATH, RUN_DUTPICS_DIRECTORY
 
-#TODO use h5 run meta data instead of combining with logbook.xlsx
+
+# TODO use h5 run meta data instead of combining with logbook.xlsx
 def generatePlotTitle(ax: matplotlib.axes.Axes, title, run_number):
     plt.suptitle(title, y=1)
 
@@ -101,3 +102,8 @@ def moving_average(tran_data, time_data, downsample_factor, window_size):
 
 def exponential_decay(t, N, λ, c):
     return (N - c) * np.exp(-λ * t) + c
+
+
+def chunker(seq, size):
+    """Helper method for iterating over chunks of a list"""
+    return (seq[pos : pos + size] for pos in range(0, len(seq), size))

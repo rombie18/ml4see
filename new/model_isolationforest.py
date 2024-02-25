@@ -23,9 +23,9 @@ OUTLIER_BOUNDARY = 0.4
 # Features to be used for outlier detection, any extreme or deviating values in these will likely result in outlier
 FEATURES = [
     "pretrig_std",
-    # "trig_val",
-    # "posttrig_std",
-    # "posttrig_exp_fit_R2",
+    "trig_val",
+    "posttrig_std",
+    "posttrig_exp_fit_R2",
     "posttrig_exp_fit_λ",
 ]
 

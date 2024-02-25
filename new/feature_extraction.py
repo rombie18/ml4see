@@ -228,6 +228,124 @@ def process_transient(h5_path, tran_name):
         return df
 
 
+def process_synthetic_transient(h5_path, tran_name):
+    logging.debug(f"Processing synthetic transient {tran_name}")
+
+    with h5py.File(h5_path, "r") as h5file:
+        # Get transient data from file
+        transient = h5file["sdr_data"]["all"][tran_name]
+
+        fs = h5file["sdr_data"].attrs["sdr_info_fs"]
+        len_pretrig = h5file["sdr_data"].attrs["sdr_info_len_pretrig"]
+        len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
+        x_lsb = transient.attrs["x_lsb"]
+        y_lsb = transient.attrs["y_lsb"]
+        event_len = len_pretrig + len_posttrig
+
+        # Get run meta data
+        scan_x_lsb_per_um = h5file["meta"].attrs["scan_x_lsb_per_um"]
+        scan_y_lsb_per_um = h5file["meta"].attrs["scan_y_lsb_per_um"]
+
+        # Construct time and frequency arrays, calculate the frequency error in ppm
+        tran_time = (
+            np.arange(start=0, stop=event_len / fs, step=1 / fs) - len_pretrig / fs
+        )
+        tran_freq = np.array(transient)
+
+        # Construct pre-trigger baseline arrays
+        tran_pretrig_time = tran_time[: len_pretrig - PRETRIG_GUARD_SAMPLES]
+        tran_pretrig_freq = tran_freq[: len_pretrig - PRETRIG_GUARD_SAMPLES]
+
+        # Construct post-trigger arrays
+        tran_posttrig_time = tran_time[len_pretrig:]
+        tran_posttrig_freq = tran_freq[len_pretrig:]
+
+        # Downsample data
+        tran_pretrig_freq_ds, tran_pretrig_time_ds = moving_average(
+            tran_pretrig_freq, tran_pretrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+        )
+        tran_posttrig_freq_ds, tran_posttrig_time_ds = moving_average(
+            tran_posttrig_freq, tran_posttrig_time, DOWNSAMPLE_FACTOR, WINDOW_SIZE
+        )
+
+        # Calculate features
+        features = {}
+        features["transient"] = tran_name
+        features["x_lsb"] = x_lsb
+        features["y_lsb"] = y_lsb
+        features["x_um"] = x_lsb / scan_x_lsb_per_um
+        features["y_um"] = y_lsb / scan_y_lsb_per_um
+        features["trig_val"] = tran_posttrig_freq_ds[0]
+        features["pretrig_min"] = np.min(tran_pretrig_freq_ds)
+        features["posttrig_min"] = np.min(tran_posttrig_freq_ds)
+        features["pretrig_max"] = np.max(tran_pretrig_freq_ds)
+        features["posttrig_max"] = np.max(tran_posttrig_freq_ds)
+        features["pretrig_std"] = np.std(tran_pretrig_freq_ds)
+        features["posttrig_std"] = np.std(tran_posttrig_freq_ds)
+
+        # Try to fit exponential decay
+        initial_guess = (
+            np.max(tran_posttrig_freq_ds),
+            1000,
+            np.mean(tran_pretrig_freq_ds),
+        )
+        boundaries = (
+            [
+                -np.inf,
+                0,
+                -np.inf,
+            ],
+            [np.inf, np.inf, np.inf],
+        )
+
+        try:
+            # params: N, λ, c
+            # model: (N - c) * np.exp(-λ * t) + c
+            params, _ = curve_fit(
+                exponential_decay,
+                tran_posttrig_time_ds,
+                tran_posttrig_freq_ds,
+                p0=initial_guess,
+                bounds=boundaries,
+            )
+
+            # Caluculate coefficient of determination (R²)
+            residuals = tran_posttrig_freq_ds - exponential_decay(
+                tran_posttrig_time_ds, *params
+            )
+            ss_res = np.sum(residuals**2)
+            ss_tot = np.sum(
+                (tran_posttrig_freq_ds - np.mean(tran_posttrig_freq_ds)) ** 2
+            )
+            r_squared = 1 - (ss_res / ss_tot)
+
+            features["posttrig_exp_fit_R2"] = r_squared
+
+            if r_squared > R2_THRESHOLD:
+                # Assign fitted parameters and R² to resulting feature set
+                features["posttrig_exp_fit_N"] = params[0]
+                features["posttrig_exp_fit_λ"] = params[1]
+                features["posttrig_exp_fit_c"] = params[2]
+            else:
+                # Insufficient fit, set parameters to zero
+                features["posttrig_exp_fit_N"] = 0
+                features["posttrig_exp_fit_λ"] = 0
+                features["posttrig_exp_fit_c"] = 0
+                params = None
+
+        except:
+            # If exponential fit fails, assign parameters to zero
+            features["posttrig_exp_fit_N"] = 0
+            features["posttrig_exp_fit_λ"] = 0
+            features["posttrig_exp_fit_c"] = 0
+            features["posttrig_exp_fit_R2"] = 0
+
+        # Convert feature set to Pandas dataframe
+        df = pd.DataFrame(features, index=[0])
+
+        return df
+
+
 if __name__ == "__main__":
     try:
         main()
