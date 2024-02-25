@@ -191,7 +191,7 @@ def plot(df, df_filtered, run_number):
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h1.set_clim(h2.get_clim())
 
-    plt.savefig(f"plots/{run_number}/map__frequency_deviation.png", bbox_inches="tight")
+    plt.savefig(f"plots/{run_number}/heatmap__frequency_deviation.png", bbox_inches="tight")
     plt.close()
 
 

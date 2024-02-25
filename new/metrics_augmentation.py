@@ -116,7 +116,18 @@ def main():
     Y = np.ceil(Y).astype("int")
 
     # Plot amplitude/noise profiles
-    plot_profile(noise_profile_transient_c, X, Y)
+    profiles = [
+        amplitude_profile_transient_N,
+        amplitude_profile_transient_λ,
+        amplitude_profile_transient_c,
+        noise_profile_transient_N,
+        noise_profile_transient_λ,
+        noise_profile_transient_c,
+        probability_profile_transient,
+        amplitude_profile_transient_N_hexagon,
+    ]
+    [plot_profile(profile) for profile in profiles]
+    exit()
 
     # Initialize .h5 file for transient storage
     init_file(run_number)
@@ -296,15 +307,17 @@ def generate_transient(x, y, N, λ, c):
     return signal
 
 
-def plot_profile(profile_function, X, Y):
-    X, Y = np.meshgrid(X, Y)
-    Z = map_profile(profile_function, X, Y)
+def plot_profile(profile_function):
+
+    X = np.linspace(-1, 1, 100)
+    X, Y = np.meshgrid(X, X)
+    Z = profile_function(X, Y)
 
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
     surf = ax.plot_surface(X, Y, Z, cmap=cm.coolwarm, linewidth=0, antialiased=False)
 
     plt.savefig(
-        f"test.png",
+        f"plots/{profile_function.__name__}.png",
         bbox_inches="tight",
     )
     plt.close()
@@ -333,6 +346,18 @@ def amplitude_profile_transient_N(x, y):
     mean = [0, 0]
     covariance = [[0.125, 0], [0, 0.125]]
     return gaussian_2d(x, y, mean, covariance)
+
+
+@np.vectorize
+def amplitude_profile_transient_N_hexagon(x, y):
+    def hexagon(pos):
+        x, y = map(abs, pos)
+        return y < 3**0.5 * min(1 - x, 1 / 2)
+
+    if hexagon((x, y)):
+        return 1
+    else:
+        return 0
 
 
 @np.vectorize
