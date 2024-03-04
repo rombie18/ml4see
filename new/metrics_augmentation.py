@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 import h5py
 import math
+from functools import partial
 
 from config import DATA_SYNTHETIC_DIRECTORY
 from utils import exponential_decay, chunker
@@ -76,11 +77,11 @@ def main():
         help="The base asymptotic y-axis offset to which the decay evolves. (default: %(default)s ppm)",
     )
     parser.add_argument(
-        "--snr",
-        default=15,
-        type=int,
+        "--noise_std",
+        default=10,
+        type=float,
         metavar="VALUE",
-        help="The signal-noise-ratio (SNR) of the constructed noisy signals. (default: %(default)s dB)",
+        help="The standard deviation of the added white noise. (default: %(default)s ppm)",
     )
     args = parser.parse_args()
 
@@ -89,7 +90,21 @@ def main():
     amplitude = args.amplitude
     decay = args.decay
     offset = args.offset
-    snr = args.snr
+    noise_std = args.noise_std
+
+    # Initialize profiles
+    global amplitude_profile_transient_N
+    global amplitude_profile_transient_λ
+    global amplitude_profile_transient_c
+    global noise_profile_transient_N
+    global noise_profile_transient_λ
+    global noise_profile_transient_c
+    amplitude_profile_transient_N = partial(profile_sigmoid_plateau, a=50, b=55)
+    amplitude_profile_transient_λ = partial(profile_sigmoid_plateau, a=50, b=55)
+    amplitude_profile_transient_c = partial(profile_constant, value=0)
+    noise_profile_transient_N = partial(profile_noise, noise_std=0.05)
+    noise_profile_transient_λ = partial(profile_noise, noise_std=0.05)
+    noise_profile_transient_c = partial(profile_noise, noise_std=0.1)
 
     # Check if directories exist
     if not os.path.exists(DATA_SYNTHETIC_DIRECTORY):
@@ -117,17 +132,22 @@ def main():
 
     # Plot amplitude/noise profiles
     profiles = [
-        amplitude_profile_transient_N,
-        amplitude_profile_transient_λ,
-        amplitude_profile_transient_c,
-        noise_profile_transient_N,
-        noise_profile_transient_λ,
-        noise_profile_transient_c,
-        probability_profile_transient,
-        amplitude_profile_transient_N_hexagon,
+        profile_constant,
+        profile_gaussian,
+        profile_hexagon,
+        profile_noise,
+        profile_sigmoid_plateau,
     ]
-    [plot_profile(profile) for profile in profiles]
-    exit()
+    # [plot_profile(profile) for profile in profiles]
+    # exit(0)
+
+    x, y = 0, 0
+    noisy_signal = generate_point(x, y, amplitude, decay, offset, noise_std)
+    # Plot
+    time = np.linspace(TIME_START, TIME_STOP, PRETRIG_SAMPLES + POSTTRIG_SAMPLES)
+    plt.plot(time, noisy_signal)
+    plt.savefig(f"plots/test/x_{x}--y_{y}.png", bbox_inches="tight")
+    exit(0)
 
     # Initialize .h5 file for transient storage
     init_file(run_number)
@@ -155,7 +175,8 @@ def main():
     for chunk_id, chunk in enumerate(chunker(file_dicts, chunk_size)):
         logging.info(f"  Processing chunk {chunk_id + 1}/{num_chunks}...")
         args = [
-            (entry["x"], entry["y"], amplitude, decay, offset, snr) for entry in chunk
+            (entry["x"], entry["y"], amplitude, decay, offset, noise_std)
+            for entry in chunk
         ]
         freqs = pool.map(generate_point_args, args)
 
@@ -253,31 +274,21 @@ def save_transients(run_number, transients_data):
 
 
 def generate_point_args(args):
-    x, y, N, λ, c, snr = args
-    return generate_point(x, y, N, λ, c, snr)
+    x, y, N, λ, c, noise_std = args
+    return generate_point(x, y, N, λ, c, noise_std)
 
 
-def generate_point(x, y, N, λ, c, snr):
+def generate_point(x, y, N, λ, c, noise_std):
+    # Use probability to select different outlier types
+    random_number = random.uniform(0, 1)
+    if random_number < 0.05:
+        N = N * 2
 
-    # Generate transient or constant based on probability profile
-    probability_transient = map_profile(probability_profile_transient, x, y)
-    if random.random() < probability_transient:
-        signal = generate_transient(x, y, N, λ, c)
-    else:
-        signal = generate_constant(x, y)
+    random_number = random.uniform(0, 1)
+    if random_number < 0.05:
+        λ = λ * 2
 
-    # Add noise to signal
-    noisy_signal = noisify_signal(signal, snr)
-
-    return noisy_signal
-
-
-def generate_constant(x, y):
-    signal = np.zeros(PRETRIG_SAMPLES + POSTTRIG_SAMPLES)
-    return signal
-
-
-def generate_transient(x, y, N, λ, c):
+    # Calculate adjusted randomised parameters based on profiles
     N_adj = (
         N
         * map_profile(amplitude_profile_transient_N, x, y)
@@ -294,13 +305,23 @@ def generate_transient(x, y, N, λ, c):
         * map_profile(noise_profile_transient_c, x, y)
     )
 
+    # Generate transient or constant based on probability profile
+    signal = generate_transient(N_adj, λ_adj, c_adj)
+
+    # Add noise to signal
+    noisy_signal = noisify_signal(signal, noise_std)
+
+    return noisy_signal
+
+
+def generate_transient(N, λ, c):
     time = np.linspace(TIME_START, TIME_STOP, PRETRIG_SAMPLES + POSTTRIG_SAMPLES)
     time_posttrig = time[PRETRIG_SAMPLES:]
 
     signal = np.concatenate(
         (
             np.zeros(PRETRIG_SAMPLES),
-            exponential_decay(time_posttrig, N_adj, λ_adj, c_adj),
+            exponential_decay(time_posttrig, N, λ, c),
         )
     )
 
@@ -342,14 +363,14 @@ def map_profile(profile_function, x, y):
 
 
 @np.vectorize
-def amplitude_profile_transient_N(x, y):
+def profile_gaussian(x, y, covariance_value=0.125):
     mean = [0, 0]
-    covariance = [[0.125, 0], [0, 0.125]]
+    covariance = [[covariance_value, 0], [0, covariance_value]]
     return gaussian_2d(x, y, mean, covariance)
 
 
 @np.vectorize
-def amplitude_profile_transient_N_hexagon(x, y):
+def profile_hexagon(x, y):
     def hexagon(pos):
         x, y = map(abs, pos)
         return y < 3**0.5 * min(1 - x, 1 / 2)
@@ -361,61 +382,23 @@ def amplitude_profile_transient_N_hexagon(x, y):
 
 
 @np.vectorize
-def amplitude_profile_transient_λ(x, y):
-    mean = [0, 0]
-    covariance = [[1, 0], [0, 1]]
-    return gaussian_2d(x, y, mean, covariance)
+def profile_sigmoid_plateau(x, y, a=50, b=55):
+    return 1 / (1 + np.exp(b * np.sqrt(x**2 + y**2) - a))
 
 
 @np.vectorize
-def amplitude_profile_transient_c(x, y):
-    return 1
+def profile_constant(x, y, value=0):
+    return value
 
 
 @np.vectorize
-def noise_profile_transient_N(x, y):
-    return np.random.normal(1, 0.1, 1)
+def profile_noise(x, y, noise_std=0.1):
+    return np.random.normal(1, noise_std, 1)
 
 
-@np.vectorize
-def noise_profile_transient_λ(x, y):
-    return np.random.normal(1, 0.1, 1)
-
-
-@np.vectorize
-def noise_profile_transient_c(x, y):
-    return np.random.normal(1, 0.1, 1)
-
-
-@np.vectorize
-def probability_profile_transient(x, y):
-    mean = [0, 0]
-    covariance = [[0.25, 0], [0, 0.25]]
-    return gaussian_2d(x, y, mean, covariance)
-
-
-def noisify_signal(signal, snr):
-    # Check if the signal is all zero
-    if np.all(signal == 0):
-        # If the signal is all zero, just generate white noise
-        noise = np.random.normal(0, 0.5, len(signal))
-        noisy_signal = noise
-    else:
-        # Set a target SNR
-        target_snr_db = snr
-        # Calculate signal power and convert to dB
-        signal_watts = signal**2
-        sig_avg_watts = np.mean(signal_watts)
-        sig_avg_db = 10 * np.log10(sig_avg_watts)
-        # Calculate noise then convert to watts
-        noise_avg_db = sig_avg_db - target_snr_db
-        noise_avg_watts = 10 ** (noise_avg_db / 10)
-
-        # Generate an sample of white noise
-        noise = np.random.normal(0, np.sqrt(noise_avg_watts), len(signal_watts))
-        # Noise up the original signal
-        noisy_signal = signal + noise
-
+def noisify_signal(signal, noise_std):
+    noise = np.random.normal(0, noise_std, len(signal))
+    noisy_signal = signal + noise
     return noisy_signal
 
 
