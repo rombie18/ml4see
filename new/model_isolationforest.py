@@ -109,12 +109,12 @@ def main():
             df_inliers = interpolate_lost_data(inliers, df_inliers, df)
 
             # Merge inlier/outlier data into single frame
-            df = pd.concat([df_inliers, df_outliers], ignore_index=True)
-            df = df.sort_values(["transient"])
+            df_processed = pd.concat([df_inliers, df_outliers], ignore_index=True)
+            df_processed = df_processed.sort_values(["transient"])
 
             # Save processed data to csv file
             logging.debug(f"Storing processed data in file run_{run_number:03d}.csv")
-            df.to_csv(
+            df_processed.to_csv(
                 os.path.join(DATA_PROCESSED_DIRECTORY, f"run_{run_number:03d}.csv"),
                 index=False,
             )
@@ -147,21 +147,21 @@ def main():
 
             # Anotate dataframes with inliers/outlier type
             df_inliers = df[df["transient"].isin(inliers)]
-            df_inliers.insert(loc=1, column="type", value="inlier")
+            df_inliers.insert(loc=1, column="predicted_type", value="inlier")
             df_outliers = df[df["transient"].isin(outliers)]
-            df_outliers.insert(loc=1, column="type", value="outlier")
+            df_outliers.insert(loc=1, column="predicted_type", value="outlier")
 
             # If all transients get rejected at one position, interpolate lost data from neighboring positions
             logging.info("Interpolating missing data points from neighbors")
             df_inliers = interpolate_lost_data(inliers, df_inliers, df)
 
             # Merge inlier/outlier data into single frame
-            df = pd.concat([df_inliers, df_outliers], ignore_index=True)
-            df = df.sort_values(["transient"])
+            df_processed = pd.concat([df_inliers, df_outliers], ignore_index=True)
+            df_processed = df_processed.sort_values(["transient"])
 
             # Save processed data to csv file
             logging.debug(f"Storing processed data in file syn_{syn_number:03d}.csv")
-            df.to_csv(
+            df_processed.to_csv(
                 os.path.join(DATA_PROCESSED_DIRECTORY, f"syn_{syn_number:03d}.csv"),
                 index=False,
             )
@@ -349,7 +349,6 @@ def do_interpolate(inliers, df, position, group, step_x, step_y):
 
         point = {
             "transient": f"intr_{randint(0, 999999):06d}",
-            "type": "inlier",
             "x_lsb": "",
             "y_lsb": "",
             "x_um": x_um,

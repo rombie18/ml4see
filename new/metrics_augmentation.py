@@ -26,13 +26,16 @@ SCAN_X_STEPS = 181
 SCAN_Y_START = -180
 SCAN_Y_STOP = 180
 SCAN_Y_STEPS = 181
-SCAN_HITS_PER_STEP = 1
+SCAN_HITS_PER_STEP = 10
 SCAN_X_LSB_PER_UM = 99
 SCAN_Y_LSB_PER_UM = 93.46
 
 SAMPLING_FREQUENCY = 20e6
 PRETRIG_SAMPLES = 20000
 POSTTRIG_SAMPLES = 200000
+
+OUTLIER_INJECTION_THRESHOLD = 1
+OUTLIER_INJECTION_PROBABILITY = 0.01
 
 
 def main():
@@ -99,9 +102,9 @@ def main():
     global noise_profile_transient_N
     global noise_profile_transient_λ
     global noise_profile_transient_c
-    amplitude_profile_transient_N = partial(profile_sigmoid_plateau, a=50, b=55)
-    amplitude_profile_transient_λ = partial(profile_sigmoid_plateau, a=50, b=55)
-    amplitude_profile_transient_c = partial(profile_constant, value=0)
+    amplitude_profile_transient_N = partial(profile_sigmoid_plateau, k=1, a=30)
+    amplitude_profile_transient_λ = partial(profile_sigmoid_plateau, k=1, a=10)
+    amplitude_profile_transient_c = partial(profile_constant, value=1)
     noise_profile_transient_N = partial(profile_noise, noise_std=0.05)
     noise_profile_transient_λ = partial(profile_noise, noise_std=0.05)
     noise_profile_transient_c = partial(profile_noise, noise_std=0.1)
@@ -141,14 +144,6 @@ def main():
     # [plot_profile(profile) for profile in profiles]
     # exit(0)
 
-    x, y = 0, 0
-    noisy_signal = generate_point(x, y, amplitude, decay, offset, noise_std)
-    # Plot
-    time = np.linspace(TIME_START, TIME_STOP, PRETRIG_SAMPLES + POSTTRIG_SAMPLES)
-    plt.plot(time, noisy_signal)
-    plt.savefig(f"plots/test/x_{x}--y_{y}.png", bbox_inches="tight")
-    exit(0)
-
     # Initialize .h5 file for transient storage
     init_file(run_number)
 
@@ -178,15 +173,17 @@ def main():
             (entry["x"], entry["y"], amplitude, decay, offset, noise_std)
             for entry in chunk
         ]
-        freqs = pool.map(generate_point_args, args)
+        points = pool.map(generate_point_args, args)
 
         transients_data = []
-        for tran_dict, freq in zip(chunk, freqs):
+        for tran_dict, point in zip(chunk, points):
             transients_data.append(
                 {
                     "number": tran_dict["id"],
                     "position": (tran_dict["x"], tran_dict["y"]),
-                    "data": freq,
+                    "data": point["signal"],
+                    "type": point["point_type"],
+                    "outlier_type": point["outlier_type"],
                 }
             )
 
@@ -244,6 +241,8 @@ def save_transients(run_number, transients_data):
             tran_x = transient_data["position"][0]
             tran_y = transient_data["position"][1]
             transient = transient_data["data"]
+            tran_type = transient_data["type"]
+            outlier_type = transient_data["outlier_type"]
 
             # store everything to a dataset
             tran_ds = all_group.create_dataset(
@@ -253,6 +252,9 @@ def save_transients(run_number, transients_data):
             tran_ds.attrs.create("x_lsb", tran_x)
             tran_ds.attrs.create("y_lsb", tran_y)
             tran_ds.attrs.create("dataset_unit", "Hz")
+
+            tran_ds.attrs.create("tran_type", tran_type)
+            tran_ds.attrs.create("outlier_type", outlier_type)
 
             # append dataset to by-x hierarchy
             by_x_x_group = by_x_group.require_group(f"x_{tran_x:06d}")
@@ -279,14 +281,6 @@ def generate_point_args(args):
 
 
 def generate_point(x, y, N, λ, c, noise_std):
-    # Use probability to select different outlier types
-    random_number = random.uniform(0, 1)
-    if random_number < 0.05:
-        N = N * 2
-
-    random_number = random.uniform(0, 1)
-    if random_number < 0.05:
-        λ = λ * 2
 
     # Calculate adjusted randomised parameters based on profiles
     N_adj = (
@@ -305,13 +299,37 @@ def generate_point(x, y, N, λ, c, noise_std):
         * map_profile(noise_profile_transient_c, x, y)
     )
 
+    point_type = "inlier"
+    outlier_type = "no_anomaly"
+
+    # Only inject outliers if transient is not zero
+    if N_adj > OUTLIER_INJECTION_THRESHOLD:
+        # Use probability to select different outlier types
+        random_number = random.uniform(0, 1)
+        if random_number < OUTLIER_INJECTION_PROBABILITY:
+            point_type = "outlier"
+
+            random_number = random.uniform(0, 1)
+            if random_number < 0.50:
+                outlier_type = "amplitude_anomaly"
+                N_adj = N_adj * 2
+
+            random_number = random.uniform(0, 1)
+            if random_number < 0.50:
+                outlier_type = "decay_anomaly"
+                λ_adj = λ_adj * 2
+
     # Generate transient or constant based on probability profile
     signal = generate_transient(N_adj, λ_adj, c_adj)
 
     # Add noise to signal
     noisy_signal = noisify_signal(signal, noise_std)
 
-    return noisy_signal
+    return {
+        "point_type": point_type,
+        "outlier_type": outlier_type,
+        "signal": noisy_signal,
+    }
 
 
 def generate_transient(N, λ, c):
@@ -320,7 +338,7 @@ def generate_transient(N, λ, c):
 
     signal = np.concatenate(
         (
-            np.zeros(PRETRIG_SAMPLES),
+            np.repeat(c, PRETRIG_SAMPLES),
             exponential_decay(time_posttrig, N, λ, c),
         )
     )
@@ -344,8 +362,8 @@ def plot_profile(profile_function):
     plt.close()
 
 
-@np.vectorize
 def map_profile(profile_function, x, y):
+
     if x < 0:
         mapped_x = x / (SCAN_X_START * SCAN_X_LSB_PER_UM)
     if x > 0:
@@ -382,8 +400,8 @@ def profile_hexagon(x, y):
 
 
 @np.vectorize
-def profile_sigmoid_plateau(x, y, a=50, b=55):
-    return 1 / (1 + np.exp(b * np.sqrt(x**2 + y**2) - a))
+def profile_sigmoid_plateau(x, y, k=1, a=30):
+    return 1 / (1 + np.exp(k * a * np.sqrt(x**2 + y**2) - a))
 
 
 @np.vectorize

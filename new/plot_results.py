@@ -7,7 +7,15 @@ import numpy as np
 import seaborn as sns
 from sklearn.metrics import mean_squared_error
 import matplotlib.ticker as ticker
-
+from sklearn.metrics import (
+    confusion_matrix,
+    classification_report,
+    ConfusionMatrixDisplay,
+    RocCurveDisplay,
+    roc_curve,
+    PrecisionRecallDisplay,
+    precision_recall_curve,
+)
 
 from config import (
     DATA_PROCESSED_DIRECTORY,
@@ -62,6 +70,52 @@ def main():
                 os.path.join(DATA_PROCESSED_DIRECTORY, f"run_{run_number:03d}.csv")
             )
 
+            # Only retain specified area of interest
+            # TODO make this cleaner and maybe seperate function?
+            x_range = (-215, 215)
+            y_range = (-215, 215)
+            if x_range != None:
+                logging.debug(f"x_range present, limiting plot to {y_range}")
+                df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
+
+            if y_range != None:
+                logging.debug(f"y_range present, limiting plot to {y_range}")
+                df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
+
+            # Convert to magnitude of frequency deviation (absolute value)
+            df["trig_val"] = df["trig_val"].abs()
+
+            # Split data into in/outliers
+            df_inliers = df.loc[df["type"] == "inlier"]
+            df_outliers = df.loc[df["type"] == "outlier"]
+
+            # Convert run number to string
+            run_number = f"{run_number:03d}"
+
+            # Plot heatmap
+            logging.info("Plotting heatmap")
+            if not os.path.exists(f"plots/{run_number}"):
+                os.mkdir(f"plots/{run_number}")
+
+            plot(df, df_inliers, run_number)
+            plot_λ(df, df_inliers, run_number)
+
+            # x_zoom_range = (-140, -90)
+            # y_zoom_range = (-170, -120)
+            # plot_zoom(df, df_inliers, run_number, x_zoom_range, y_zoom_range)
+
+            # TODO manual parameter selections based on run numbers, improve this
+            if run_number in [11, 12]:
+                plot_3(df, df_inliers, run_number, None)
+                plot_3_λ(df, df_inliers, run_number, None)
+                plot_4(df, df_inliers, run_number, None)
+                plot_4_λ(df, df_inliers, run_number, None)
+            else:
+                plot_3(df, df_inliers, run_number, 0)
+                plot_3_λ(df, df_inliers, run_number, 0)
+                plot_4(df, df_inliers, run_number, 0)
+                plot_4_λ(df, df_inliers, run_number, 0)
+
         else:
             logging.info(f"Generating plots for synthetic run {run_number:03d}")
 
@@ -72,65 +126,83 @@ def main():
                 os.path.join(DATA_PROCESSED_DIRECTORY, f"syn_{run_number:03d}.csv")
             )
 
-        # Only retain specified area of interest
-        # TODO make this cleaner and maybe seperate function?
-        x_range = (-215, 215)
-        y_range = (-215, 215)
-        if x_range != None:
-            logging.debug(f"x_range present, limiting plot to {y_range}")
-            df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
+            # Only retain specified area of interest
+            # TODO make this cleaner and maybe seperate function?
+            x_range = (-215, 215)
+            y_range = (-215, 215)
+            if x_range != None:
+                logging.debug(f"x_range present, limiting plot to {y_range}")
+                df = df[(df["x_um"] >= x_range[0]) & (df["x_um"] <= x_range[1])]
 
-        if y_range != None:
-            logging.debug(f"y_range present, limiting plot to {y_range}")
-            df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
+            if y_range != None:
+                logging.debug(f"y_range present, limiting plot to {y_range}")
+                df = df[(df["y_um"] >= y_range[0]) & (df["y_um"] <= y_range[1])]
 
-        # Convert to magnitude of frequency deviation (absolute value)
-        df["trig_val"] = df["trig_val"].abs()
+            # Convert to magnitude of frequency deviation (absolute value)
+            df["trig_val"] = df["trig_val"].abs()
 
-        # Split data into in/outliers
-        df_inliers = df.loc[df["type"] == "inlier"]
-        df_outliers = df.loc[df["type"] == "outlier"]
+            # Split data into in/outliers
+            df_inliers = df.loc[df["predicted_type"] == "inlier"]
+            df_outliers = df.loc[df["predicted_type"] == "outlier"]
 
-        # Convert run number to string
-        if not args.synthetic:
-            run_number = f"{run_number:03d}"
-        else:
+            # Convert run number to string
             run_number = f"SYN-{run_number:03d}"
 
-        # Plot heatmap
-        logging.info("Plotting heatmap")
-        if not os.path.exists(f"plots/{run_number}"):
-            os.mkdir(f"plots/{run_number}")
+            # Plot heatmap
+            logging.info("Plotting heatmap")
+            if not os.path.exists(f"plots/{run_number}"):
+                os.mkdir(f"plots/{run_number}")
 
-        plot(df, df_inliers, run_number)
-        plot_λ(df, df_inliers, run_number)
+            plot(df, df_inliers, run_number)
+            plot_λ(df, df_inliers, run_number)
 
-        # x_zoom_range = (-140, -90)
-        # y_zoom_range = (-170, -120)
-        # plot_zoom(df, df_inliers, run_number, x_zoom_range, y_zoom_range)
+            # x_zoom_range = (-140, -90)
+            # y_zoom_range = (-170, -120)
+            # plot_zoom(df, df_inliers, run_number, x_zoom_range, y_zoom_range)
 
-        # TODO manual parameter selections based on run numbers, improve this
-        if run_number in [11, 12]:
-            plot_3(df, df_inliers, run_number, None)
-            plot_3_λ(df, df_inliers, run_number, None)
-            plot_4(df, df_inliers, run_number, None)
-            plot_4_λ(df, df_inliers, run_number, None)
-        else:
             plot_3(df, df_inliers, run_number, 0)
             plot_3_λ(df, df_inliers, run_number, 0)
             plot_4(df, df_inliers, run_number, 0)
             plot_4_λ(df, df_inliers, run_number, 0)
 
-        # Display elementary metrics
-        outlier_percentage = (
-            len(df_outliers) / (len(df_inliers) + len(df_outliers)) * 100
-        )
+            # Set-up target vectors
+            y_true = df["actual_type"][df["actual_type"].notna()]
+            y_pred = df["predicted_type"][df["predicted_type"].notna()]
+            target_names = ["inlier", "outlier"]
 
-        print(f"----- RUN {run_number} -----")
-        print(f"Number of outliers: {len(df_outliers)}")
-        print(f"Number of inliers: {len(df_inliers)}")
-        print(f"Outlier percentage: {outlier_percentage:.2f}%")
-        print("-------------------")
+            # Display elementary metrics and classification report
+            outlier_percentage = (
+                len(df_outliers) / (len(df_inliers) + len(df_outliers)) * 100
+            )
+
+            print(f"----- RUN {run_number} -----")
+            print(f"Number of outliers: {len(df_outliers)}")
+            print(f"Number of inliers: {len(df_inliers)}")
+            print(f"Outlier percentage: {outlier_percentage:.2f}%")
+            print(" ")
+            # Print confusion matrix with annotations
+            cm = confusion_matrix(y_true, y_pred, labels=target_names)
+            print("Confusion Matrix:")
+            print("\t     Predicted")
+            print("\t     " + " ".join(target_names))
+            for i, class_row in enumerate(cm):
+                print(f"True {target_names[i]}:", end=" ")
+                for count in class_row:
+                    print(f"{count}", end=" ")
+                print()
+            print(" ")
+            print(classification_report(y_true, y_pred, target_names=target_names))
+            print(" ")
+            print("-------------------")
+
+            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names).plot(values_format='')
+            plt.savefig(f"plots/{run_number}/confusion_matrix.png", bbox_inches="tight")
+            plt.close()
+            
+            cm = confusion_matrix(y_true, y_pred, labels=target_names, normalize='true')
+            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names).plot()
+            plt.savefig(f"plots/{run_number}/confusion_matrix_normalised.png", bbox_inches="tight")
+            plt.close()
 
         logging.info(f"Successfully processed run {run_number}")
 
@@ -191,7 +263,9 @@ def plot(df, df_filtered, run_number):
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
     h1.set_clim(h2.get_clim())
 
-    plt.savefig(f"plots/{run_number}/heatmap__frequency_deviation.png", bbox_inches="tight")
+    plt.savefig(
+        f"plots/{run_number}/heatmap__frequency_deviation.png", bbox_inches="tight"
+    )
     plt.close()
 
 
@@ -299,7 +373,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     )
     cbar = plt.colorbar(h2, ax=axs[1], fraction=0.046, pad=0.04)
     cbar.set_label("Exponential decay constant (1/s)")
-    
+
     axs[0].set_title(f"No filtering (run_{run_number})")
     axs[0].set_xlabel("X position (µm)")
     axs[0].set_ylabel("Y position (µm)")

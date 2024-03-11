@@ -307,6 +307,10 @@ def process_synthetic_transient(h5_path, tran_name):
         len_posttrig = h5file["sdr_data"].attrs["sdr_info_len_posttrig"]
         x_lsb = transient.attrs["x_lsb"]
         y_lsb = transient.attrs["y_lsb"]
+        
+        tran_type = transient.attrs["tran_type"]
+        outlier_type = transient.attrs["outlier_type"]
+        
         event_len = len_pretrig + len_posttrig
 
         # Get run meta data
@@ -338,6 +342,8 @@ def process_synthetic_transient(h5_path, tran_name):
         # Calculate features
         features = {}
         features["transient"] = tran_name
+        features["actual_type"] = tran_type
+        features["actual_outlier_type"] = outlier_type
         features["x_lsb"] = x_lsb
         features["y_lsb"] = y_lsb
         features["x_um"] = x_lsb / scan_x_lsb_per_um

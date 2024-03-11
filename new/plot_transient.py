@@ -144,14 +144,14 @@ with h5py.File(h5_path, "r") as h5file:
     # Plot results
     figure, axis = plt.subplots(1, 1, figsize=(10, 6))
 
-    # axis.plot(
-    #     np.append(tran_pretrig_time_ds, tran_posttrig_time_ds) * 1000,
-    #     np.append(tran_pretrig_freq_ds, tran_posttrig_freq_ds),
-    #     linestyle="-",
-    #     label="Transient response DUT",
-    #     color="dodgerblue",
-    #     linewidth=2
-    # )
+    axis.plot(
+        np.append(tran_pretrig_time_ds, tran_posttrig_time_ds) * 1000,
+        np.append(tran_pretrig_freq_ds, tran_posttrig_freq_ds),
+        linestyle="-",
+        label="Transient response DUT",
+        color="dodgerblue",
+        linewidth=2
+    )
     
     axis.plot(
         np.append(tran_pretrig_time, tran_posttrig_time) * 1000,
