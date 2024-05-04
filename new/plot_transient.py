@@ -139,10 +139,11 @@ with h5py.File(h5_path, "r") as h5file:
         features["posttrig_exp_fit_c"] = 0
         features["posttrig_exp_fit_R2"] = 0
 
+    print(len(tran_freq))
     print(features)
 
     # Plot results
-    figure, axis = plt.subplots(1, 1, figsize=(10, 6))
+    figure, axis = plt.subplots(1, 1, figsize=(8, 4.8))
 
     axis.plot(
         np.append(tran_pretrig_time_ds, tran_posttrig_time_ds) * 1000,
@@ -188,11 +189,11 @@ with h5py.File(h5_path, "r") as h5file:
     axis.set_title(f" ")
     axis.legend()
 
-    min = np.min([np.min(tran_pretrig_freq_ds), np.min(tran_posttrig_freq_ds)])
-    min = min * 1.1
-    max = np.max([np.max(tran_pretrig_freq_ds), np.max(tran_posttrig_freq_ds)])
-    max = max * 1.1
-    axis.set_ylim(min, max)
+    # min = np.min([np.min(tran_pretrig_freq_ds), np.min(tran_posttrig_freq_ds)])
+    # min = min * 1.1
+    # max = np.max([np.max(tran_pretrig_freq_ds), np.max(tran_posttrig_freq_ds)])
+    # max = max * 1.1
+    # axis.set_ylim(min, max)
 
     axis.set_xlabel("Time (ms)")
     axis.set_ylabel("Instantaneous frequency error (ppm)")

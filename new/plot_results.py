@@ -22,6 +22,9 @@ from config import (
 )
 
 
+FIGSIZE_SINGLE = (5, 5)
+FIGSIZE_DOUBLE = (10, 5)
+
 def main():
     # Initialise logging
     logging.basicConfig(
@@ -195,12 +198,16 @@ def main():
             print(" ")
             print("-------------------")
 
-            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names).plot(values_format='')
+            fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
+            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names)
+            cm_display.plot(ax=ax, values_format='', colorbar=False)
             plt.savefig(f"plots/{run_number}/confusion_matrix.png", bbox_inches="tight")
             plt.close()
             
+            fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
             cm = confusion_matrix(y_true, y_pred, labels=target_names, normalize='true')
-            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names).plot()
+            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names)
+            cm_display.plot(ax=ax, values_format='.2f', colorbar=False)
             plt.savefig(f"plots/{run_number}/confusion_matrix_normalised.png", bbox_inches="tight")
             plt.close()
 
@@ -224,7 +231,7 @@ def plot(df, df_filtered, run_number):
         index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=10)
 
     im_extent = (
@@ -279,7 +286,7 @@ def plot_zoom(df, df_filtered, run_number, x_zoom_range, y_zoom_range):
         index="x_um", columns="y_um", values="trig_val"
     ).transpose()
 
-    fig, ax = plt.subplots(figsize=(6, 6))
+    fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
     fig.tight_layout(w_pad=10)
 
     im_extent = (
@@ -346,7 +353,7 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
         index="x_um", columns="y_um", values="posttrig_exp_fit_λ"
     ).transpose()
 
-    fig, axs = plt.subplots(1, 2, figsize=(12, 6))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=10)
 
     im_extent = (
@@ -426,7 +433,7 @@ def plot_3(df, df_filtered, run_number, slice_y=None):
 
     df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=5)
 
     axs[0].scatter(df_filtered["x_um"], df_filtered["trig_val"], marker=".")
@@ -467,7 +474,7 @@ def plot_4(df, df_filtered, run_number, slice_x=None):
 
     df = df.groupby(["x_um", "y_um"])["trig_val"].mean().reset_index()
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=5)
 
     axs[0].scatter(df_filtered["y_um"], df_filtered["trig_val"], marker=".")
@@ -510,7 +517,7 @@ def plot_3_λ(df, df_filtered, run_number, slice_y=None):
 
     df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=5)
 
     axs[0].scatter(df_filtered["x_um"], df_filtered["posttrig_exp_fit_λ"], marker=".")
@@ -558,7 +565,7 @@ def plot_4_λ(df, df_filtered, run_number, slice_x=None):
 
     df = df.groupby(["x_um", "y_um"])["posttrig_exp_fit_λ"].mean().reset_index()
 
-    fig, axs = plt.subplots(1, 2, figsize=(10, 5))
+    fig, axs = plt.subplots(1, 2, figsize=FIGSIZE_DOUBLE)
     fig.tight_layout(w_pad=5)
 
     axs[0].scatter(df_filtered["y_um"], df_filtered["posttrig_exp_fit_λ"], marker=".")

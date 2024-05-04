@@ -1,0 +1,18 @@
+# This CITATION.cff file was generated with cffinit.
+# Visit https://bit.ly/cffinit to generate yours today!
+
+cff-version: 1.2.0
+title: >-
+  Contextual Outlier Detection Ensuring Reliable Radiation
+  Sensitivity Studies
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Wout
+    family-names: Rombouts
+  - given-names: Stefan
+    family-names: Biereigel
+repository-code: 'https://github.com/rombie18/ml4see'
+license: MIT
