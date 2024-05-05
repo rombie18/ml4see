@@ -167,48 +167,40 @@ def main():
             plot_3_λ(df, df_inliers, run_number, 0)
             plot_4(df, df_inliers, run_number, 0)
             plot_4_λ(df, df_inliers, run_number, 0)
-
+            
             # Set-up target vectors
-            y_true = df["actual_type"][df["actual_type"].notna()]
-            y_pred = df["predicted_type"][df["predicted_type"].notna()]
-            target_names = ["inlier", "outlier"]
+            y_true = df["actual_outlier_type"][df["actual_outlier_type"].notna()]
+            y_pred = df['predicted_type'][df['predicted_type'].notna()]
+            labels_true = ["no_anomaly", "amplitude_anomaly", "decay_anomaly"]
+            labels_pred = ["inlier", "outlier"]
 
             # Display elementary metrics and classification report
             outlier_percentage = (
                 len(df_outliers) / (len(df_inliers) + len(df_outliers)) * 100
             )
 
+            print(" ")
             print(f"----- RUN {run_number} -----")
             print(f"Number of outliers: {len(df_outliers)}")
             print(f"Number of inliers: {len(df_inliers)}")
             print(f"Outlier percentage: {outlier_percentage:.2f}%")
             print(" ")
-            # Print confusion matrix with annotations
-            cm = confusion_matrix(y_true, y_pred, labels=target_names)
-            print("Confusion Matrix:")
-            print("\t     Predicted")
-            print("\t     " + " ".join(target_names))
-            for i, class_row in enumerate(cm):
-                print(f"True {target_names[i]}:", end=" ")
-                for count in class_row:
-                    print(f"{count}", end=" ")
-                print()
-            print(" ")
-            print(classification_report(y_true, y_pred, target_names=target_names))
-            print(" ")
-            print("-------------------")
+            
+            # Manually create a 4x2 confusion matrix
+            conf_matrix = np.zeros((len(labels_true), len(labels_pred)), dtype=int)
+
+            # Fill in the confusion matrix based on true labels and predictions
+            for true_label, pred_label in zip(y_true, y_pred):
+                true_label_i = labels_true.index(true_label)
+                pred_label_i = labels_pred.index(pred_label)
+                conf_matrix[true_label_i, pred_label_i] += 1
 
             fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
-            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names)
-            cm_display.plot(ax=ax, values_format='', colorbar=False)
+            sns.heatmap(conf_matrix, annot=True, fmt="d", cmap="Blues", cbar=False, xticklabels=labels_pred, yticklabels=labels_true, ax=ax, square=True)
+            plt.yticks(rotation=45)
+            plt.xlabel("Predicted Label")
+            plt.ylabel("True Label")
             plt.savefig(f"plots/{run_number}/confusion_matrix.png", bbox_inches="tight")
-            plt.close()
-            
-            fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
-            cm = confusion_matrix(y_true, y_pred, labels=target_names, normalize='true')
-            cm_display = ConfusionMatrixDisplay(cm, display_labels=target_names)
-            cm_display.plot(ax=ax, values_format='.2f', colorbar=False)
-            plt.savefig(f"plots/{run_number}/confusion_matrix_normalised.png", bbox_inches="tight")
             plt.close()
 
         logging.info(f"Successfully processed run {run_number}")
@@ -390,11 +382,12 @@ def plot_λ(df: pd.DataFrame, df_filtered: pd.DataFrame, run_number: int):
     axs[1].set_ylabel("Y position (µm)")
 
     # Use color scale of filtered heatmap for unfiltered to prevent extreme color changes
-    # TODO manual adjustment
-    if run_number == 26:
-        h1.set_clim(h1.get_clim()[0], 750)
-
     h2.set_clim(h1.get_clim())
+
+    # TODO manual adjustment
+    if run_number == "026":
+        h2.set_clim(h1.get_clim()[0], 800)
+        h1.set_clim(h1.get_clim()[0], 800)
 
     plt.savefig(
         f"plots/{run_number}/heatmap__exponential_decay_constant.png",
