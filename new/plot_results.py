@@ -202,6 +202,19 @@ def main():
             plt.ylabel("True Label")
             plt.savefig(f"plots/{run_number}/confusion_matrix.png", bbox_inches="tight")
             plt.close()
+            
+            conf_matrix = conf_matrix.astype(float)
+            for label in labels_true:
+                item_count = sum(conf_matrix[labels_true.index(label), :])
+                conf_matrix[labels_true.index(label), :] /= item_count
+                
+            fig, ax = plt.subplots(figsize=FIGSIZE_SINGLE)
+            sns.heatmap(conf_matrix, annot=True, fmt=".2%", cmap="Blues", cbar=False, xticklabels=labels_pred, yticklabels=labels_true, ax=ax, square=True)
+            plt.yticks(rotation=45)
+            plt.xlabel("Predicted Label")
+            plt.ylabel("True Label")
+            plt.savefig(f"plots/{run_number}/confusion_matrix_normalized.png", bbox_inches="tight")
+            plt.close()
 
         logging.info(f"Successfully processed run {run_number}")
 
